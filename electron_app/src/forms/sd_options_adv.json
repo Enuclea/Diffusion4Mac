@@ -37,21 +37,52 @@
             }
         ]
     },
+    {
+        "id": "lora_path_desc",
+        "component": "InputWithDesc",
+        "title": "LoRA Path",
+        "description": "Optional: Path to a Flux LoRA safetensors file",
+        "children": [
+            {
+                "id": "lora_path",
+                "component": "FilePathTextBox",
+                "config": {
+                    "path_type": "file"
+                },
+                "is_persistant": true
+            }
+        ]
+    },
 
     {
         "id": "selected_sd_model_desc",
         "component": "InputWithDesc",
-        "title": "Model",
-        "description": "The Stable Diffusion model used to generate images.",
+        "title": "Model Selection",
+        "description": "Select the Flux model version to use.",
         "children": [
             {
-                "id": "selected_sd_model",
+                "id": "model_selection",
                 "component": "Dropdown",
-                "options": ["Default_SD1.5" ],
+                "options": ["Flux Schnell", "Flux Klein"],
+                "default_value": "Flux Schnell",
                 "icon": "photo",
                 "output_type" : "str",
-                "default_value" : "Default_SD1.5",
                 "is_persistant" : true
+            }
+        ]
+    },
+    {
+        "id": "guide_img_1_desc",
+        "component": "InputWithDesc",
+        "title": "Guided Reference Image",
+        "description": "Reference Image for Flux Klein",
+        "children": [
+            {
+                "id" : "guide_img_1",
+                "component" : "ImageInput",
+                "get_img_size" : false,
+                "draw_mask": false,
+                "store_masked_image" : false
             }
         ]
     },

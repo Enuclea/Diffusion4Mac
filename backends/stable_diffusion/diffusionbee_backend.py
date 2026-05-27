@@ -1,77 +1,25 @@
-print("starting backend")
-import numpy as np
-import argparse
-from PIL import Image
-import json
-import random
-import multiprocessing
 import sys
-import copy
-import math
-import time
-import traceback
+import json
 import os
+import random
 from pathlib import Path
+from PIL import Image
+import torch
+from diffusers import FluxPipeline, FluxImg2ImgPipeline
 
+try:
+    from diffusers import Flux2KleinKVPipeline
+except ImportError:
+    pass
 
-# b2py t2im {"prompt": "sun glasses" , "img_width":640 , "img_height" : 640 , "num_imgs" : 10 , "input_image":"/Users/divamgupta/Downloads/inn.png" , "mask_image" : "/Users/divamgupta/Downloads/maa.png" , "is_inpaint":true  }
-
-if not ( getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')):
-    print("Adding sys paths")
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-    sys.path.append(os.path.join(dir_path , "../model_converter"))
-
-    model_interface_path = os.environ.get('MODEL_INTERFACE_PATH') or "../stable_diffusion_tf_models"
-    sys.path.append( os.path.join(dir_path , model_interface_path) )
-else:
-    print("not adding sys paths")
-
-
-from convert_model import convert_model
-from stable_diffusion.stable_diffusion import StableDiffusion , ModelContainer
-from stable_diffusion.utils.utils import get_sd_run_from_dict
-
-from applets.applets import register_applet , run_applet
-from applets.frame_interpolator import FrameInterpolator
-# get the model interface form the environ
-USE_DUMMY_INTERFACE = False
-if  USE_DUMMY_INTERFACE :
-    from fake_interface import ModelInterface
-else:
-    from interface import ModelInterface
-
-model_container = ModelContainer()
-
-
+print("starting backend")
 
 home_path = Path.home()
-
 projects_root_path = os.path.join(home_path, ".diffusionbee")
+default_data_root = os.path.join(projects_root_path, "images")
 
-if not os.path.isdir(projects_root_path):
-    os.mkdir(projects_root_path)
-
-
-
-
-if 'DEBUG' in os.environ and str(os.environ['DEBUG']) == '1':
-    debug_output_path = os.path.join(projects_root_path, "debug_outs")
-    if not os.path.isdir(debug_output_path):
-        os.mkdir(debug_output_path)
-    print("Debug outputs stored at : " , debug_output_path )
-else:
-    debug_output_path = None
-
-
-
-
-defualt_data_root = os.path.join(projects_root_path, "images")
-
-
-if not os.path.isdir(defualt_data_root):
-    os.mkdir(defualt_data_root)
-
-
+if not os.path.isdir(default_data_root):
+    os.makedirs(default_data_root, exist_ok=True)
 
 class Unbuffered(object):
     def __init__(self, stream):
@@ -88,122 +36,167 @@ class Unbuffered(object):
     def __getattr__(self, attr):
         return getattr(self.stream, attr)
 
-
 sys.stdout = Unbuffered(sys.stdout)
 
+def get_input():
+    return sys.stdin.readline()
 
+def load_image(image_path):
+    if not image_path or not os.path.exists(image_path):
+        return None
+    try:
+        return Image.open(image_path).convert("RGB")
+    except:
+        return None
 
+def main():
+    print("sdbk mdld") # notify UI model logic is ready to load/run
 
-
-def process_opt(d, generator):
-
-    batch_size = 1# int(d['batch_size'])
-    n_imgs = math.ceil(d['num_imgs'] / batch_size)
-    sd_run = get_sd_run_from_dict(d)
-
-    for i in range(n_imgs):
-        
-        sd_run.img_id = i
-
-        print("got" , d )
-
-        outs  = generator.generate(sd_run)
-
-        if outs is None:
-            return
-
-        img = outs['img']
-
-        if img is None:
-            return
-        
-        for i in range(len(img)):
-            s = ''.join(filter(str.isalnum, str(d['prompt'])[:30] ))
-            fpath = os.path.join(defualt_data_root , "%s_%d.png"%(s ,  random.randint(0 ,100000000)) )
-
-            Image.fromarray(img[i]).save(fpath)
-            ret_dict = {"generated_img_path" : fpath}
-
-            if 'aux_img' in outs:
-                ret_dict['aux_output_image_path'] = outs['aux_img']
-
-            print("sdbk nwim %s"%(json.dumps(ret_dict)) )
-
-
-
-
-def diffusion_bee_main():
-
-    time.sleep(2)
-    register_applet(model_container , FrameInterpolator)
-
-    print("sdbk mltl Loading Model")
-
-    def callback(state="" , progress=-1):
-        print("sdbk dnpr "+str(progress) )
-        if state != "Generating":
-            print("sdbk gnms " + state)
-
-        if is_avail():
-            if "__stop__" in get_input():
-                return "stop"
-
-    generator = StableDiffusion( model_container , ModelInterface , None , model_name=None, callback=callback, debug_output_path=debug_output_path )    
-
-
-    print("sdbk mdld")
+    current_model = None
+    pipe = None
+    pipe_img2img = None
+    pipe_kv = None
 
     while True:
         print("sdbk inrd") # input ready
 
         inp_str = get_input()
-
-        print("got" , inp_str)
-
         if inp_str.strip() == "":
             continue
 
-        if  ((not "b2py t2im" in inp_str ) and (not "b2py rapp" in inp_str) ) or "__stop__" in inp_str:
+        if "__stop__" in inp_str:
+            break
+
+        if not "b2py t2im" in inp_str:
             continue
 
-        if "b2py t2im" in inp_str:
-            inp_str = inp_str.replace("b2py t2im" , "").strip()
-            try:
-                d = json.loads(inp_str)
-                print("sdbk inwk") # working on the input
+        print("sdbk inwk") # working
         
-                process_opt(d, generator)
+        try:
+            # parse json
+            json_str = inp_str.replace("b2py t2im", "").strip()
+            data = json.loads(json_str)
+
+            prompt = data.get("prompt", "")
+            num_imgs = data.get("num_imgs", 1)
+            num_steps = data.get("num_steps", 25)
+            guidance_scale = data.get("guidance_scale", 7.5)
+            seed = data.get("seed", -1)
+
+            if seed == -1:
+                seed = random.randint(0, 2147483647)
+
+            input_image_path = data.get("input_image", None)
+
+            # advanced custom form tags
+            raw_form_options = data.get("raw_form_options", {})
+            model_selection = raw_form_options.get("model_selection", "Flux Schnell")
+            guide_img_1_path = raw_form_options.get("guide_img_1", None)
+            lora_path = raw_form_options.get("lora_path", None)
+
+            model_id = "black-forest-labs/FLUX.1-schnell"
+            if model_selection == "Flux Klein":
+                model_id = "black-forest-labs/FLUX.1-schnell" # fall back to standard model if custom gated pipeline not installed
+
+            device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+            dtype = torch.bfloat16
+
+            # Setup pipeline if model changed or uninitialized
+            if current_model != model_id:
+                print("sdbk mdld Loading model weights...")
                 
-            except Exception as e:
-                traceback.print_exc()
-                print("sdbk errr %s"%(str(e)))
-                print("py2b eror " + str(e))
+                if pipe is not None:
+                    del pipe
+                if pipe_img2img is not None:
+                    del pipe_img2img
+                if pipe_kv is not None:
+                    del pipe_kv
+                torch.cuda.empty_cache() if torch.cuda.is_available() else None
 
-        elif "b2py rapp" in inp_str:
-            inp_str = inp_str.replace("b2py rapp" , "").strip()
-            applet_name = inp_str.split(" ")[0]
-            inp_str = inp_str.replace(applet_name , "").strip()
+                if model_selection == "Flux Klein" and "Flux2KleinKVPipeline" in globals():
+                    # use KV pipeline for klein multi-image editing or standard text2img
+                    pipe = Flux2KleinKVPipeline.from_pretrained(model_id, torch_dtype=dtype)
+                    pipe.to(device)
+                else:
+                    # Schnell or standard Klein
+                    pipe = FluxPipeline.from_pretrained(model_id, torch_dtype=dtype)
+                    pipe.to(device)
+                    pipe_img2img = FluxImg2ImgPipeline.from_pretrained(model_id, torch_dtype=dtype)
+                    pipe_img2img.to(device)
 
-            try:
-                d = json.loads(inp_str)
-                print("sdbk inwk") # working on the input
-                run_applet(applet_name , d )
-            except Exception as e:
-                traceback.print_exc()
-                print("sdbk errr %s"%(str(e)))
+                current_model = model_id
 
+            if lora_path and os.path.exists(lora_path):
+                pipe.load_lora_weights(lora_path)
+                if pipe_img2img:
+                    pipe_img2img.load_lora_weights(lora_path)
 
-from  stable_diffusion.utils.stdin_input import is_avail, get_input
+            generator = torch.Generator(device=device).manual_seed(seed)
 
+            input_image = load_image(input_image_path)
+            guide_image = load_image(guide_img_1_path)
+
+            for i in range(num_imgs):
+                print(f"sdbk dnpr {i}/{num_imgs}")
+
+                if model_selection == "Flux Klein":
+                    if guide_image:
+                        # multi reference KV editing
+                        # diffusers API for KV pipeline usually accepts reference_images list
+                        out = pipe(
+                            prompt=prompt,
+                            reference_images=[guide_image] + ([input_image] if input_image else []),
+                            guidance_scale=guidance_scale,
+                            num_inference_steps=num_steps,
+                            generator=generator
+                        )
+                    else:
+                        # basic T2I with Klein KV pipeline handles standard inputs too usually
+                        # or fallback to FluxPipeline if needed
+                        out = pipe(
+                            prompt=prompt,
+                            guidance_scale=guidance_scale,
+                            num_inference_steps=num_steps,
+                            generator=generator,
+                            height=data.get("img_height", 1024),
+                            width=data.get("img_width", 1024)
+                        )
+                else:
+                    if input_image:
+                        out = pipe_img2img(
+                            prompt=prompt,
+                            image=input_image,
+                            guidance_scale=guidance_scale,
+                            num_inference_steps=num_steps,
+                            generator=generator,
+                            strength=0.8
+                        )
+                    else:
+                        out = pipe(
+                            prompt=prompt,
+                            guidance_scale=guidance_scale,
+                            num_inference_steps=num_steps,
+                            generator=generator,
+                            height=data.get("img_height", 1024),
+                            width=data.get("img_width", 1024)
+                        )
+
+                img = out.images[0]
+
+                s = ''.join(filter(str.isalnum, prompt[:30]))
+                fpath = os.path.join(default_data_root, f"{s}_{random.randint(0,100000000)}.png")
+                img.save(fpath)
+
+                ret_dict = {"generated_img_path": fpath}
+                print("sdbk nwim %s" % (json.dumps(ret_dict)))
+
+        except Exception as e:
+            print(f"Error processing: {e}")
+            traceback.print_exc()
 
 if __name__ == "__main__":
-    multiprocessing.freeze_support()  # for pyinstaller
-
-    if len(sys.argv) > 1 and sys.argv[1] == 'convert_model':
-        checkpoint_filename = sys.argv[2]
-        out_filename = sys.argv[3]
-        convert_model(checkpoint_filename, out_filename )
-        print("model converted ")
-    else:
-        diffusion_bee_main()
-
+    import traceback
+    try:
+        main()
+    except Exception as e:
+        traceback.print_exc()

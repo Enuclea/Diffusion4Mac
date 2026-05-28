@@ -94,6 +94,25 @@
                     </label>
                 </div>
             </div>
+
+            <!-- Card 6: Gemini API Key -->
+            <div class="setting_card">
+                <div class="card_hero hero_red">
+                    <span class="hero_icon">🔑</span>
+                </div>
+                <div class="card_body">
+                    <h3>Gemini API Key</h3>
+                    <p>Enter your Gemini API Key to enable Gemini Studio cloud generation (Imagen 3).</p>
+                </div>
+                <div class="card_footer">
+                    <input 
+                        type="password" 
+                        v-model="app.app_state.app_data.settings.gemini_api_key" 
+                        placeholder="AIzaSy..." 
+                        class="form_input" 
+                    />
+                </div>
+            </div>
         </div>
     </div>
 </template>
@@ -189,6 +208,10 @@ Settings.sidebar_show = "always"
 
 .hero_green {
     background: linear-gradient(135deg, #11998e, #38ef7d);
+}
+
+.hero_red {
+    background: linear-gradient(135deg, #FF416C, #FF4B2B);
 }
 
 /* Card body text */

@@ -32,6 +32,7 @@ import Training from "../pages/Training.vue"
 import Inpainting from "../pages/Inpainting.vue"
 import PromptDesigner from "../pages/PromptDesigner.vue"
 import LoraStore from "../pages/LoraStore.vue"
+import GeminiStudio from "../pages/GeminiStudio.vue"
 
 import History from "../pages/History.vue"
 import Homepage from "../pages/Homepage.vue"
@@ -51,7 +52,7 @@ export default {
     },
     components: {
         Txt2Img, Img2Img , Inpainting , AppletPage , History, Homepage , ModelStore, 
-        Logs, Settings, PostProcessImage, Training, PromptDesigner, LoraStore
+        Logs, Settings, PostProcessImage, Training, PromptDesigner, LoraStore, GeminiStudio
     },
     mounted() {
         this.app.functions.switch_page = this.switch_page; 
@@ -60,7 +61,7 @@ export default {
     data() {
 
         let always_on_pages = { Homepage:Homepage  , Txt2Img:Txt2Img , Img2Img:Img2Img , 
-            Inpainting:Inpainting , PostProcessImage:PostProcessImage  , ModelStore:ModelStore , History:History, Logs:Logs, Settings:Settings , Training:Training, PromptDesigner:PromptDesigner, LoraStore:LoraStore }
+            Inpainting:Inpainting , PostProcessImage:PostProcessImage  , ModelStore:ModelStore , History:History, Logs:Logs, Settings:Settings , Training:Training, PromptDesigner:PromptDesigner, LoraStore:LoraStore, GeminiStudio:GeminiStudio }
 
         let last_opened_timmings = {}
 
@@ -102,13 +103,27 @@ export default {
         all_applet_items(){
             let items = []
             for(let page_id of Object.keys(this.always_on_pages) ){
+                    let sidebar_show = this.always_on_pages[page_id].sidebar_show;
+                    let home_category = this.always_on_pages[page_id].home_category;
+                    
+                    if (page_id === 'GeminiStudio') {
+                        let key = this.app?.app_state?.app_data?.settings?.gemini_api_key;
+                        if (key && key.trim()) {
+                            sidebar_show = "always";
+                            home_category = "main";
+                        } else {
+                            sidebar_show = "never";
+                            home_category = undefined;
+                        }
+                    }
+                    
                     items.push( { id: page_id , 
                         text : this.always_on_pages[page_id].title , 
                         description: this.always_on_pages[page_id].description, 
                         icon : this.always_on_pages[page_id].icon , 
                         img_icon:this.always_on_pages[page_id].img_icon , 
-                        sidebar_show: this.always_on_pages[page_id].sidebar_show ,  
-                        home_category:this.always_on_pages[page_id].home_category } )
+                        sidebar_show: sidebar_show ,  
+                        home_category: home_category } )
             }
 
             // todo : in future count the last used N applets, and then show them on sidebar, and sort them alphabetically

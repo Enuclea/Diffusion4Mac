@@ -130,6 +130,9 @@ export default
         if(data.settings.save_exif_meta == undefined)
             data.settings.save_exif_meta = false
 
+        if(data.settings.gemini_api_key == undefined)
+            data.settings.gemini_api_key = ""
+
         if(!data.custom_models){
             data.custom_models = {}
         }

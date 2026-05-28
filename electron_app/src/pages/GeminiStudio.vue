@@ -40,7 +40,7 @@
                         :key="ratio.value" 
                         class="ratio_card" 
                         :class="{ active: selectedRatio === ratio.value }"
-                        @click="if (!loading) selectedRatio = ratio.value"
+                        @click="selectRatio(ratio.value)"
                     >
                         <div class="ratio_preview" :class="'preview_' + ratio.value.replace(':', '_')"></div>
                         <span class="ratio_label">{{ ratio.label }}</span>
@@ -295,6 +295,11 @@ const GeminiStudio = {
             const org_path = this.savedImagePath;
             window.ipcRenderer.sendSync('save_file', org_path + "||" + out_path);
             this.app.show_toast("Image saved successfully");
+        },
+        selectRatio(ratioVal) {
+            if (!this.loading) {
+                this.selectedRatio = ratioVal;
+            }
         }
     }
 };

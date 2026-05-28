@@ -305,36 +305,52 @@ def main():
                 if loaded_adapters and hasattr(pipeline, "set_adapters"):
                     try:
                         print(f"Setting active adapters: {loaded_adapters} with weights: {loaded_weights}")
-                        pipeline.set_adapters(loaded_adapters, weights=loaded_weights)
+                        try:
+                            pipeline.set_adapters(loaded_adapters, adapter_weights=loaded_weights)
+                        except TypeError:
+                            pipeline.set_adapters(loaded_adapters, weights=loaded_weights)
                     except Exception as e:
                         print(f"Error setting active adapters: {e}")
 
-            apply_loras(pipe, lora_paths, lora_weights)
-
-            generator = torch.Generator(device=device).manual_seed(seed)
-
+            # Load input image and mask image first to determine the active pipeline
             input_image = load_image(input_image_path)
             if input_image:
                 input_image = resize_image_aspect(input_image, max_dim)
 
+            mask_image_path = data.get("mask_image_path", None)
+            mask_image = load_image(mask_image_path) if mask_image_path else None
+
+            # Setup active pipeline reference
+            active_pipe = pipe
+            if mask_image and input_image:
+                if pipe_inpaint is None:
+                    print("Initializing inpainting pipeline from loaded components...")
+                    if model_selection == "Flux Klein" and "Flux2KleinInpaintPipeline" in globals():
+                        pipe_inpaint = Flux2KleinInpaintPipeline(**pipe.components)
+                    elif "FluxInpaintPipeline" in globals():
+                        pipe_inpaint = FluxInpaintPipeline(**pipe.components)
+                active_pipe = pipe_inpaint
+            elif model_selection == "Flux Klein" and "Flux2KleinPipeline" in globals():
+                active_pipe = pipe
+            else:
+                ref_image = input_image or (guide_images[0] if guide_images else None)
+                if ref_image:
+                    active_pipe = pipe_img2img
+                else:
+                    active_pipe = pipe
+
+            apply_loras(active_pipe, lora_paths, lora_weights)
+
+            generator = torch.Generator(device=device).manual_seed(seed)
+
+            if mask_image and input_image:
+                if mask_image.size != input_image.size:
+                    mask_image = mask_image.resize(input_image.size)
+
             for i in range(num_imgs):
                 print(f"sdbk dnpr {i}/{num_imgs}")
 
-                # Check if this is an inpainting job
-                mask_image_path = data.get("mask_image_path", None)
-                mask_image = load_image(mask_image_path) if mask_image_path else None
-
                 if mask_image and input_image:
-                    if pipe_inpaint is None:
-                        print("Initializing inpainting pipeline from loaded components...")
-                        if model_selection == "Flux Klein" and "Flux2KleinInpaintPipeline" in globals():
-                            pipe_inpaint = Flux2KleinInpaintPipeline(**pipe.components)
-                        elif "FluxInpaintPipeline" in globals():
-                            pipe_inpaint = FluxInpaintPipeline(**pipe.components)
-
-                    if mask_image.size != input_image.size:
-                        mask_image = mask_image.resize(input_image.size)
-
                     w, h = input_image.size
                     inpaint_w = ((w + 8) // 16) * 16
                     inpaint_h = ((h + 8) // 16) * 16

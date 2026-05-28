@@ -185,7 +185,7 @@ const GeminiStudio = {
             }
         },
         async enhancePromptCall(userPrompt, apiKey) {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+            const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
             const payload = {
                 contents: [{
                     parts: [{
@@ -219,7 +219,7 @@ const GeminiStudio = {
             }
         },
         async generateImageCall(prompt, aspectRatio, apiKey) {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
+            const url = `https://generativelanguage.googleapis.com/v1/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
             const payload = {
                 instances: [
                     {

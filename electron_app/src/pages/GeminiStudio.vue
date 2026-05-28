@@ -340,14 +340,14 @@ const GeminiStudio = {
             if (!this.savedImagePath) return;
             
             if (this.app.functions.send_to_img2img) {
-                this.app.functions.send_to_img2img(this.imageSrc, { prompt: this.prompt });
+                this.app.functions.send_to_img2img(this.savedImagePath, { prompt: this.prompt });
             } else {
                 // fallback
                 this.app.functions.switch_page("Img2Img");
                 Vue.nextTick(() => {
                     const img2img = this.app.$refs.router.$refs['Img2Img'];
                     if (img2img && img2img[0] && img2img[0].$refs.sd_applet) {
-                        Vue.set(img2img[0].$refs.sd_applet.sd_options, 'input_img', this.imageSrc);
+                        Vue.set(img2img[0].$refs.sd_applet.sd_options, 'input_img', this.savedImagePath);
                         if (this.prompt) {
                             Vue.set(img2img[0].$refs.sd_applet.sd_options, 'prompt', this.prompt);
                         }

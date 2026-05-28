@@ -9,7 +9,7 @@ import { faChevronRight, faStopCircle, faPlayCircle , faPlus , faChevronLeft ,
 	faFileImage  , faFileAudio , faFile , faBars , faAngleDown , faTrash, faChevronDown ,
 	faGlobe, faFolder, faCamera, faKeyboard,
 	faMusic , faMicrophone , faTimes , faCheck , faHandPaper , faExpandArrowsAlt, faEraser , faUndo , faRedo, faImage, faMicrochip , faCube , 
-	faMagic, faSave, faHistory, faCubes, faImages, faHome , faPaintBrush, faCircle , faMask, faTools, faThList, faEllipsisV, faInbox, faSlidersH} from '@fortawesome/free-solid-svg-icons'
+	faMagic, faSave, faHistory, faCubes, faImages, faHome , faPaintBrush, faCircle , faMask, faTools, faThList, faEllipsisV, faInbox, faSlidersH, faCloud} from '@fortawesome/free-solid-svg-icons'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 
 library.add(faBars)
@@ -56,6 +56,7 @@ library.add(faThList)
 library.add(faEllipsisV)
 library.add(faInbox)
 library.add(faSlidersH)
+library.add(faCloud)
 
 Vue.component('font-awesome-icon', FontAwesomeIcon)
 Vue.config.productionTip = false

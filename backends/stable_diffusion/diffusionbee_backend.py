@@ -391,15 +391,24 @@ def main():
                 else:
                     ref_image = input_image or (guide_images[0] if guide_images else None)
                     if ref_image:
-                        print("Running FluxImg2ImgPipeline")
+                        w, h = ref_image.size
+                        img2img_w = ((w + 8) // 16) * 16
+                        img2img_h = ((h + 8) // 16) * 16
+                        
+                        user_strength = data.get("input_image_strength", None)
+                        strength = float(user_strength) / 100.0 if user_strength is not None else 0.8
+                        
+                        print(f"Running FluxImg2ImgPipeline with dimensions {img2img_w}x{img2img_h} and strength {strength}")
                         with torch.inference_mode():
                             out = pipe_img2img(
                                 prompt=prompt,
                                 image=ref_image,
+                                height=img2img_h,
+                                width=img2img_w,
                                 guidance_scale=guidance_scale,
                                 num_inference_steps=num_steps,
                                 generator=generator,
-                                strength=0.8
+                                strength=strength
                             )
                     else:
                         print("Running standard FluxPipeline Text2Img")

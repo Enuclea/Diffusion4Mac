@@ -42,6 +42,18 @@ Analyze existing images to create prompt descriptions:
 
 ---
 
+## Gemini Studio (Cloud-Based Generation)
+Diffusion4Mac integrates optional cloud-based image generation:
+- **Setup**: Navigate to the **Settings** tab and enter a valid Google Gemini API Key in the **Gemini API Key** card. Once entered, the **Gemini Studio** tab immediately activates on both the sidebar and homepage.
+- **Generation (Imagen 3)**: Enter your text prompt, select your target aspect ratio (`1:1`, `16:9`, `9:16`, `4:3`, `3:4`), and click **Generate with Gemini**.
+- **AI Prompt Enhancement**: Toggle **Enhance Prompt with Gemini AI** to automatically rewrite and optimize the user prompt with **Gemini 2.5 Flash** before sending it to Imagen 3.
+- **Pipeline Routing**: 
+  - Click **Send to Img2Img** to preload the generated image in the Image-to-Image editor.
+  - Click **Use as Txt2Img Reference** to route the image as a guide reference in Text-to-Image (using Flux Klein).
+  - Click **Save Image** to export the result to any directory on your filesystem.
+
+---
+
 ## File Directory & Uninstalling
 
 Diffusion4Mac stores generated images, history, and models locally:

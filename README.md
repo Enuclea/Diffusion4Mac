@@ -2,11 +2,12 @@
 
 ### Diffusion4Mac is an easy, premium way to run Stable Diffusion locally on MacOS. Comes with a simple installer. No dependencies or technical knowledge needed.
 
-* Runs locally on your computer - no data is sent to the cloud.
-* Supports FLUX.1-schnell, FLUX.2 [klein], local Gemma LLM vision and prompt assistance, custom LoRAs, and multiple LoRA stacking.
+* Runs locally on your computer, with optional cloud-based frontier power via Google Gemini and Imagen 3.
+* Supports FLUX.1-schnell, FLUX.2 [klein], cloud-based Imagen 3 and Gemini 2.5 Flash, local Gemma LLM vision and prompt assistance, custom LoRAs, and multiple LoRA stacking.
 
 ## Features
-* Full data privacy - nothing is sent to the cloud.
+* Full data privacy for local generations.
+* Optional **Gemini Studio** tab for cloud-based generation using Google **Imagen 3** (`imagen-3.0-generate-002`) and prompt enhancement using **Gemini 2.5 Flash** (requires Gemini API Key).
 * Clean, premium, and easy to use UI.
 * Image to image & Text to image generation.
 * Gated & custom models support.

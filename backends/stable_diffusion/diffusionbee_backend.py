@@ -174,14 +174,19 @@ def main():
 
             # advanced custom form tags
             raw_form_options = data.get("raw_form_options", {})
-            model_selection = raw_form_options.get("model_selection", "Flux Schnell")
-            lora_path = raw_form_options.get("lora_path", None)
-            lora_paths = raw_form_options.get("lora_paths", [])
+            model_selection = raw_form_options.get("model_selection", "Flux Schnell") or data.get("model_selection", "Flux Schnell")
+            
+            # Retrieve LoRA parameters from root data (injected via LoraStore) or fallback to raw_form_options (advanced UI field)
+            lora_path = data.get("lora_path", None) or raw_form_options.get("lora_path", None)
+            lora_paths = data.get("lora_paths", []) or raw_form_options.get("lora_paths", [])
             if lora_path and not lora_paths:
                 lora_paths = [lora_path]
 
-            lora_weight = raw_form_options.get("lora_weight", 1.0)
-            lora_weights = raw_form_options.get("lora_weights", [])
+            lora_weight = data.get("lora_weight", None)
+            if lora_weight is None:
+                lora_weight = raw_form_options.get("lora_weight", 1.0)
+            
+            lora_weights = data.get("lora_weights", []) or raw_form_options.get("lora_weights", [])
             if not lora_weights:
                 if lora_weight is not None:
                     try:

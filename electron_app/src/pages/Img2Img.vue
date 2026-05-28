@@ -35,9 +35,10 @@ const Img2Img = {
              params = JSON.parse(JSON.stringify(params))
              params.input_img = undefined
              params.seed = undefined
-             if(params.raw_form_options)
+             if(params.raw_form_options) {
                 params.raw_form_options.input_img = undefined
                 params.raw_form_options.seed = undefined
+             }
              this.$refs.sd_applet.load_options(params)
           }
           this.app.functions.switch_page("Img2Img")

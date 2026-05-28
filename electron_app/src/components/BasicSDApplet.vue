@@ -111,6 +111,80 @@ export default {
 
             options.applet_name = this.name
 
+            // Inject LoRA(s) if enabled
+            let active_lora_paths = [];
+            let active_lora_keywords = [];
+            let active_lora_weights = [];
+            
+            if (this.app && this.app.app_state && this.app.app_state.app_data && this.app.app_state.app_data.settings) {
+                let lora_settings = this.app.app_state.app_data.settings.loras || {};
+                let custom_loras = this.app.app_state.app_data.settings.custom_loras || [];
+                let model_sel = options.model_selection || "Flux Schnell";
+                let target_family = model_sel === "Flux Schnell" ? "flux_schnell" : "flux_klein";
+                let stacking = !!this.app.app_state.app_data.settings.lora_stacking;
+                
+                // Define default loras lookup
+                let default_loras = [
+                    { id: 'flux_schnell_detailed', family: 'flux_schnell', keyword: 'detailed' },
+                    { id: 'flux_schnell_cinematic', family: 'flux_schnell', keyword: 'cinematic' },
+                    { id: 'flux_schnell_portrait', family: 'flux_schnell', keyword: 'portrait' },
+                    { id: 'flux_klein_detailed', family: 'flux_klein', keyword: 'detailed' },
+                    { id: 'flux_klein_cinematic', family: 'flux_klein', keyword: 'cinematic' },
+                    { id: 'flux_klein_portrait', family: 'flux_klein', keyword: 'portrait' }
+                ];
+                
+                // Combine default + custom loras
+                let all_loras = [...default_loras, ...custom_loras];
+                
+                for (let lora of all_loras) {
+                    if (lora.family === target_family && lora_settings[lora.id]) {
+                        let path = "";
+                        if (lora.is_custom) {
+                            path = lora.asset_path;
+                        } else {
+                            let asset = this.app.assets_manager.get_downloaded_asset(lora.id);
+                            if (asset && asset.status === 'done') {
+                                path = asset.asset_path;
+                            }
+                        }
+                        
+                        if (path) {
+                            active_lora_paths.push(path);
+                            if (lora.keyword && lora.keyword.trim()) {
+                                active_lora_keywords.push(lora.keyword.trim());
+                            }
+                            let lora_strengths = this.app.app_state.app_data.settings.lora_strengths || {};
+                            let weight = lora_strengths[lora.id];
+                            if (weight === undefined) {
+                                weight = 1.0;
+                            }
+                            active_lora_weights.push(weight);
+                        }
+                    }
+                }
+                
+                // If stacking is disabled, keep only the first active lora
+                if (!stacking && active_lora_paths.length > 1) {
+                    active_lora_paths = [active_lora_paths[0]];
+                    active_lora_keywords = active_lora_keywords.length > 0 ? [active_lora_keywords[0]] : [];
+                    active_lora_weights = active_lora_weights.length > 0 ? [active_lora_weights[0]] : [1.0];
+                }
+            }
+            
+            if (active_lora_paths.length > 0) {
+                options.lora_paths = active_lora_paths;
+                options.lora_path = active_lora_paths[0]; // fallback
+                options.lora_weights = active_lora_weights;
+                options.lora_weight = active_lora_weights[0]; // fallback
+                
+                // Prepend trigger keywords to prompt if not already present
+                for (let keyword of active_lora_keywords) {
+                    if (options.prompt && !options.prompt.toLowerCase().includes(keyword.toLowerCase())) {
+                        options.prompt = keyword + ", " + options.prompt;
+                    }
+                }
+            }
+
             // map the selected avail model to the tdict
             if(options.selected_sd_model){
                 options.model_tdict_path = this.app.assets_manager.get_downloaded_asset_path(options.selected_sd_model)
@@ -262,6 +336,33 @@ export default {
                     title: "Stable Diffusion 1.5 (Default)", 
                     model_meta_data : {"type" : "sd_model", "float_type" : "float16" ,  "sd_type" : "SD_1x" }
                 } )
+            }
+
+            let model_sel = this.sd_options.model_selection || "Flux Schnell";
+            if (model_sel === "Flux Klein") {
+                ret.push({
+                    id: "flux_klein",
+                    title: "FLUX.2 [klein]",
+                    description: "Compact 9B-parameter model optimized for speed, text-to-image, and reference KV-editing. Requires HF token.",
+                    md5: "flux_klein_dummy",
+                    filename: "FLUX.2-klein-9B",
+                    model_meta_data: {
+                        sd_type: "Flux 2",
+                        float_type: "bf16"
+                    }
+                });
+            } else if (model_sel === "Flux Schnell") {
+                ret.push({
+                    id: "flux_schnell",
+                    title: "FLUX.1-schnell",
+                    description: "Compact 12B-parameter model optimized for 1-4 step generation speed and high-quality outputs.",
+                    md5: "flux_schnell_dummy",
+                    filename: "FLUX.1-schnell",
+                    model_meta_data: {
+                        sd_type: "Flux 1",
+                        float_type: "bf16"
+                    }
+                });
             }
             
             return ret

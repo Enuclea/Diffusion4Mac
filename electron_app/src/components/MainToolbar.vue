@@ -52,21 +52,16 @@
                      </span>
                 </template>
                 
-                <b-dropdown-item-button @click="show_help" >Help</b-dropdown-item-button>
-                <b-dropdown-item-button @click="open_url('https://discord.gg/t6rC5RaJQn')"  >Start Discord Chat</b-dropdown-item-button>
                 <b-dropdown-item-button  @click="app.functions.switch_page('Logs')" >Show Logs</b-dropdown-item-button>
 
-                <b-dropdown-item-button @click="open_url('https://diffusionbee.com/MODEL_LICENSE.txt')" >Model License</b-dropdown-item-button>
-                <b-dropdown-item-button @click="open_url('https://diffusionbee.com/OPEN_SOURCE_LICENSES.txt')" >Open-source Licences</b-dropdown-item-button>
+                 <b-dropdown-item-button @click="open_url('https://raw.githubusercontent.com/enuclea/Diffusion4Mac/main/MODEL_LICENSE.txt')" >Model License</b-dropdown-item-button>
+                 <b-dropdown-item-button @click="open_url('https://raw.githubusercontent.com/enuclea/Diffusion4Mac/main/OPEN_SOURCE_LICENSES.txt')" >Open-source Licences</b-dropdown-item-button>
 
-                <b-dropdown-item-button @click="show_about"  >About</b-dropdown-item-button>
-                <b-dropdown-item-button  @click="app.functions.switch_page('ContactUs')" >Contact Us</b-dropdown-item-button>
-                <b-dropdown-item-button  @click="app.functions.switch_page('ContactUs')" >Report Issues</b-dropdown-item-button>
+                 <b-dropdown-item-button @click="show_about"  >About</b-dropdown-item-button>
 
+                 <b-dropdown-item-button   @click="app.functions.switch_page('Settings')"  >Settings</b-dropdown-item-button>
 
-                <b-dropdown-item-button   @click="app.functions.switch_page('Settings')"  >Settings</b-dropdown-item-button>
-
-                <b-dropdown-item-button @click="close_window"  >Close</b-dropdown-item-button>
+                 <b-dropdown-item-button @click="close_window"  >Close</b-dropdown-item-button>
                 <!-- #TODO set these menu items via python -->
                 
          </b-dropdown>

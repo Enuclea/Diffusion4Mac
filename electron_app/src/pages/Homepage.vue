@@ -5,18 +5,21 @@
         <div v-for="category in categories" :key="category[0]"> 
             <h2> {{category[1]}} </h2>
             <div class="icon_container">
-                <div v-for="item in all_icons(category[0]) " 
+                <div v-for="item in all_icons(category[0])" 
                     :key="item.id" 
-                    v-bind:style="{ 'background-image': 'url(' +( item.img_icon || default_img )+ ')' }"
-                    @click="app.functions.switch_page(item.id)" 
-                    class="select_app"> 
+                    @click="item.id === 'Training' ? null : app.functions.switch_page(item.id)" 
+                    class="select_app"
+                    :class="{ 'select_app_disabled': item.id === 'Training' }"> 
+                    <div class="select_app_image" v-bind:style="{ 'background-image': 'url(' +( item.img_icon || default_img )+ ')' }"></div>
                     <div class="select_app_desc"> 
-                        <h2>  {{item.text}}</h2> 
-                        <p> {{item.description}} </p>
-                        <div class="l_button button_colored" style="margin-top: 10px;"> Open </div>
+                        <div class="select_app_text">
+                            <h2>{{item.text}}</h2> 
+                            <p>{{item.description}}</p>
+                        </div>
+                        <div v-if="item.id === 'Training'" class="l_button button_disabled" style="margin-top: 10px; width: fit-content;"> Coming Soon </div>
+                        <div v-else class="l_button button_colored" style="margin-top: 10px; width: fit-content;"> Open </div>
                     </div> 
                 </div>
-            
             </div>
 
             <br> 
@@ -91,12 +94,65 @@ Home.sidebar_show = "always"
 }
 
 .select_app{
-    width:280px;
-    height: 230px;
+    width: 280px;
+    height: 250px;
     margin: 5px;
-    background-size: contain;
     background-color: var(--sidebar-color);
     position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.select_app:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.select_app_image {
+    height: 120px;
+    width: 100%;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.select_app_desc {
+    padding: 12px 15px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.select_app_text h2 {
+    font-size: 1.1rem;
+    margin: 0 0 6px 0;
+    font-weight: 600;
+}
+
+.select_app_text p {
+    font-size: 0.85rem;
+    margin: 0;
+    opacity: 0.8;
+    line-height: 1.25;
+}
+
+.select_app_disabled {
+    filter: grayscale(100%) opacity(0.5);
+    cursor: not-allowed !important;
+}
+
+.button_disabled {
+    background-color: var(--options-input-bg) !important;
+    color: rgba(255, 255, 255, 0.4) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    pointer-events: none;
+    cursor: not-allowed;
 }
 
 @media only screen and (max-width: 1730px) {
@@ -105,34 +161,16 @@ Home.sidebar_show = "always"
   }
 }
 
-
-
 @media only screen and (max-width: 1430px) {
   .select_app {
     width : calc(25% - 10px)
   }
 }
 
-
 @media only screen and (max-width: 1200px) {
   .select_app {
     width : calc(33% - 10px)
   }
-}
-
-
-
-
-.select_app_desc{
-    background-color: var(--sidebar-color); ;
-    padding: 15px;
-    position: absolute;
-    bottom: 0;
-    width: 100%;
-}
-
-.select_app_desc > p{
-    margin-bottom: 3px;
 }
 
 

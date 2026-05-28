@@ -3,6 +3,7 @@
 </template>
 <script>
 
+import Vue from 'vue'
 import { send_to_py } from "./py_vue_bridge.js"
 import {get_tokens} from './clip_tokeniser/clip_encoder.js'
 import {compute_time_remaining} from "./utils.js"
@@ -32,6 +33,7 @@ export default {
             is_stopping: false,
             is_backend_loaded : false,
             is_model_downloading: false, 
+            downloading_model_id: null,
             is_input_avail : false,
             model_loading_msg : "",
             model_loading_title : "",
@@ -50,9 +52,55 @@ export default {
             let msg_code = msg.substring(0, 4);
             if(msg_code == "mdld"){
                 this.is_backend_loaded = true;
+                this.is_model_downloading = false;
+                this.loading_percentage = -1;
+                if (this.$parent.app_state) {
+                    this.$parent.app_state.global_loader_percentage = -1;
+                }
+                
+                let completed_model_id = this.downloading_model_id;
+                if (!completed_model_id && this.$parent.assets_manager) {
+                    if (this.$parent.assets_manager.downloading['flux_klein'] && this.$parent.assets_manager.downloading['flux_klein'].status === 'downloading') {
+                        completed_model_id = 'flux_klein';
+                    } else if (this.$parent.assets_manager.downloading['flux_schnell'] && this.$parent.assets_manager.downloading['flux_schnell'].status === 'downloading') {
+                        completed_model_id = 'flux_schnell';
+                    }
+                }
+                
+                if (completed_model_id && this.$parent.assets_manager) {
+                    if (!this.$parent.assets_manager.downloading[completed_model_id]) {
+                        Vue.set(this.$parent.assets_manager.downloading, completed_model_id, {
+                            id: completed_model_id,
+                            status: 'done',
+                            progress: 100
+                        });
+                    } else {
+                        Vue.set(this.$parent.assets_manager.downloading[completed_model_id], 'status', 'done');
+                        Vue.set(this.$parent.assets_manager.downloading[completed_model_id], 'progress', 100);
+                    }
+                    
+                    let title = completed_model_id === 'flux_klein' ? 'FLUX.2 [klein]' : 'FLUX.1-schnell';
+                    let asset_path = completed_model_id === 'flux_klein' ? 'black-forest-labs/FLUX.2-klein-9B' : 'black-forest-labs/FLUX.1-schnell';
+                    
+                    Vue.set(this.$parent.assets_manager.downloaded_assets, completed_model_id, {
+                        id: completed_model_id,
+                        title: title,
+                        status: 'done',
+                        is_locally_imported: true,
+                        asset_path: asset_path
+                    });
+                }
+                
+                this.downloading_model_id = null;
+                this.$parent.app_state.global_loader_modal_msg = "";
             }
             if(msg_code == "mldn"){
                 this.is_model_downloading = false;
+                this.loading_percentage = -1;
+                if (this.$parent.app_state) {
+                    this.$parent.app_state.global_loader_percentage = -1;
+                }
+                this.downloading_model_id = null;
             }
             if(msg_code == "inrd"){
                 console.log("cps unset inrd ")
@@ -84,6 +132,17 @@ export default {
             if(msg_code == "mlpr"){
                 let p = Number(msg.substring(5).trim());
                 this.loading_percentage = p;
+                if (this.$parent.app_state) {
+                    this.$parent.app_state.global_loader_percentage = p;
+                }
+                if (this.$parent.assets_manager) {
+                    if (this.$parent.assets_manager.downloading['flux_klein']) {
+                        Vue.set(this.$parent.assets_manager.downloading['flux_klein'], 'progress', p);
+                    }
+                    if (this.$parent.assets_manager.downloading['flux_schnell']) {
+                        Vue.set(this.$parent.assets_manager.downloading['flux_schnell'], 'progress', p);
+                    }
+                }
             }
             if(msg_code == "mlms"){
                 let p = (msg.substring(5).trim());
@@ -99,6 +158,29 @@ export default {
 
                 if( p.includes("Downloading") ){
                     this.is_model_downloading = true;
+                    let model_id = null;
+                    if (p.includes("FLUX.2-klein-9B") || p.includes("flux_klein")) {
+                        model_id = "flux_klein";
+                    } else if (p.includes("FLUX.1-schnell") || p.includes("flux_schnell")) {
+                        model_id = "flux_schnell";
+                    }
+                    if (model_id) {
+                        this.downloading_model_id = model_id;
+                        if (this.$parent.assets_manager) {
+                            if (!this.$parent.assets_manager.downloading[model_id]) {
+                                Vue.set(this.$parent.assets_manager.downloading, model_id, {
+                                    id: model_id,
+                                    status: 'downloading',
+                                    progress: 0
+                                });
+                            } else {
+                                Vue.set(this.$parent.assets_manager.downloading[model_id], 'status', 'downloading');
+                            }
+                        }
+                        let model_title = model_id === "flux_klein" ? "FLUX.2 [klein]" : "FLUX.1-schnell";
+                        this.$parent.app_state.global_loader_modal_msg = "Downloading " + model_title + "... This may take a while.";
+                        this.$parent.app_state.global_loader_percentage = 0;
+                    }
                 }
 
                 this.model_loading_title = p;
@@ -107,7 +189,37 @@ export default {
 
             if(msg_code == "errr"){
                 this.is_model_downloading = false;
+                this.loading_percentage = -1;
+                if (this.$parent.app_state) {
+                    this.$parent.app_state.global_loader_percentage = -1;
+                }
                 let error = msg.substring(5).trim()
+                
+                let failed_model_id = this.downloading_model_id;
+                if (!failed_model_id && this.$parent.assets_manager) {
+                    if (this.$parent.assets_manager.downloading['flux_klein'] && this.$parent.assets_manager.downloading['flux_klein'].status === 'downloading') {
+                        failed_model_id = 'flux_klein';
+                    } else if (this.$parent.assets_manager.downloading['flux_schnell'] && this.$parent.assets_manager.downloading['flux_schnell'].status === 'downloading') {
+                        failed_model_id = 'flux_schnell';
+                    }
+                }
+                
+                if (failed_model_id && this.$parent.assets_manager) {
+                    if (!this.$parent.assets_manager.downloading[failed_model_id]) {
+                        Vue.set(this.$parent.assets_manager.downloading, failed_model_id, {
+                            id: failed_model_id,
+                            status: 'error',
+                            error: error.slice(-30),
+                            progress: 0
+                        });
+                    } else {
+                        Vue.set(this.$parent.assets_manager.downloading[failed_model_id], 'status', 'error');
+                        Vue.set(this.$parent.assets_manager.downloading[failed_model_id], 'error', error.slice(-30));
+                    }
+                }
+                
+                this.downloading_model_id = null;
+                this.$parent.app_state.global_loader_modal_msg = "";
                 if(this.attached_cbs){
                     if(this.attached_cbs.on_err)
                         this.attached_cbs.on_err(error);
@@ -177,6 +289,14 @@ export default {
 
             this.generation_state_msg = "Running " + applet_name
 
+            const settings = this.$parent.app_state.app_data.settings;
+            if (settings) {
+                params.save_exif_meta = !!settings.save_exif_meta;
+                if (settings.hf_token) {
+                    params.hf_token = settings.hf_token;
+                }
+            }
+
             send_to_py("rapp " + applet_name + " " + JSON.stringify(params)) 
             
         },
@@ -214,6 +334,15 @@ export default {
             this.remaining_times = ""
             this.iter_times = []
             this.nb_its = prompt_params.ddim_steps||25
+            
+            const settings = this.$parent.app_state.app_data.settings;
+            if (settings) {
+                if (settings.hf_token) {
+                    prompt_params.hf_token = settings.hf_token;
+                }
+                prompt_params.save_exif_meta = !!settings.save_exif_meta;
+            }
+
             send_to_py("t2im " + JSON.stringify(prompt_params)) 
         }
 

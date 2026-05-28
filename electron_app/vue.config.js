@@ -7,7 +7,13 @@ try {
 
 
 module.exports = {
-    
+    devServer: {
+        client: {
+            overlay: {
+                runtimeErrors: false,
+            },
+        },
+    },
     pluginOptions: {
         electronBuilder: {
             preload: './src/preload.js',
@@ -15,10 +21,10 @@ module.exports = {
             // Or, for multiple preload files:
             // preload: { preload: 'src/preload.js', otherPreload: 'src/preload2.js' }
             builderOptions: {
-                appId: 'com.diffusionbee.diffusionbee',
-                artifactName: "DiffusionBee"+(build_config.build_name||"")+"-${version}.${ext}",
+                appId: 'com.diffusion4mac.diffusion4mac',
+                artifactName: "Diffusion4Mac"+(build_config.build_name||"")+"-${version}.${ext}",
 
-                afterSign: "./afterSignHook.js",
+                // afterSign: "./afterSignHook.js",
                 "extraResources": [{
                     "from": process.env.BACKEND_BUILD_PATH , 
                     "to": "core",
@@ -40,7 +46,7 @@ module.exports = {
                     "target": {
                         "target": "dmg",
                         "arch": [
-                            process.env.BUILD_ARCH  //'arm64' , 'x64'
+                            process.env.BUILD_ARCH || process.arch  //'arm64' , 'x64'
                         ]
                     }
                 },

@@ -74,11 +74,64 @@
     {
         "id": "guide_img_1_desc",
         "component": "InputWithDesc",
-        "title": "Guided Reference Image",
+        "title": "Reference Image 1",
         "description": "Reference Image for Flux Klein",
+        "include_in": ["advanced"],
+        "cond_include_in_AND" : [  {"lhs" : "model_selection"  , "comparator":"eq" , "rhs": "Flux Klein" } ],
         "children": [
             {
                 "id" : "guide_img_1",
+                "component" : "ImageInput",
+                "get_img_size" : false,
+                "draw_mask": false,
+                "store_masked_image" : false
+            }
+        ]
+    },
+    {
+        "id": "guide_img_2_desc",
+        "component": "InputWithDesc",
+        "title": "Reference Image 2",
+        "description": "Optional second Reference Image for Flux Klein",
+        "include_in": ["advanced"],
+        "cond_include_in_AND" : [  {"lhs" : "model_selection"  , "comparator":"eq" , "rhs": "Flux Klein" } ],
+        "children": [
+            {
+                "id" : "guide_img_2",
+                "component" : "ImageInput",
+                "get_img_size" : false,
+                "draw_mask": false,
+                "store_masked_image" : false
+            }
+        ]
+    },
+    {
+        "id": "guide_img_3_desc",
+        "component": "InputWithDesc",
+        "title": "Reference Image 3",
+        "description": "Optional third Reference Image for Flux Klein",
+        "include_in": ["advanced"],
+        "cond_include_in_AND" : [  {"lhs" : "model_selection"  , "comparator":"eq" , "rhs": "Flux Klein" } ],
+        "children": [
+            {
+                "id" : "guide_img_3",
+                "component" : "ImageInput",
+                "get_img_size" : false,
+                "draw_mask": false,
+                "store_masked_image" : false
+            }
+        ]
+    },
+    {
+        "id": "guide_img_4_desc",
+        "component": "InputWithDesc",
+        "title": "Reference Image 4",
+        "description": "Optional fourth Reference Image for Flux Klein",
+        "include_in": ["advanced"],
+        "cond_include_in_AND" : [  {"lhs" : "model_selection"  , "comparator":"eq" , "rhs": "Flux Klein" } ],
+        "children": [
+            {
+                "id" : "guide_img_4",
                 "component" : "ImageInput",
                 "get_img_size" : false,
                 "draw_mask": false,
@@ -107,34 +160,17 @@
         ]
     },
     {
-        "id": "67854325222",
-        "component": "InputWithDesc",
-        "title": "Specify image dimensions",
-        "include_in_AND" : ["advanced" , "img2img"],
-        "description": "If you want to specify dimensions for output images.",
-        "children": [
-            {
-                "id": "force_use_given_size",
-                "component": "Checkbox",
-                "output_type" : "bool",
-                "default_value" : false,
-                "is_persistant" : false
-            }
-        ]
-    } ,
-
-    {
         "id": "resolution_desc",
         "component": "InputWithDesc",
         "title": "Resolution",
         "include_in" : [ "txt2img" ],
-        "cond_include_in_AND" : [  {"lhs" : "force_use_given_size"  , "comparator":"eq" , "rhs": true } ,  {"lhs" : "is_adv_mode"  , "comparator":"eq" , "rhs": true }],
-        "description": "",
+        "cond_include_in_AND" : [  {"lhs" : "is_adv_mode"  , "comparator":"eq" , "rhs": true } ],
+        "description": "Output image width and height",
         "children": [
             {
                 "id": "img_width",
                 "component": "Dropdown",
-                "options": [256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896],
+                "options": [256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 1024],
                 "icon": "img_width",
                 "output_type" : "int",
                 "default_value" : 512,
@@ -143,7 +179,7 @@
             {
                 "id": "img_height",
                 "component": "Dropdown",
-                "options": [256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896],
+                "options": [256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 1024],
                 "default_value" : 512,
                 "icon": "img_height",
                 "output_type" : "int",
@@ -203,7 +239,7 @@
                 "icon": "steps",
                 "type" : "number",
                 "output_type" : "int",
-                "default_value" : 25,
+                "default_value" : 7,
                 "is_persistant" : true
             }
         ]
@@ -245,7 +281,7 @@
                         "icon": "steps",
                         "type" : "number",
                         "output_type" : "int",
-                        "default_value" : 25,
+                        "default_value" : 7,
                         "is_persistant" : true
                     }
                 ]

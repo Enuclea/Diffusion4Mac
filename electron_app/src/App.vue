@@ -5,14 +5,14 @@
         
         <StableDiffusion ref="stable_diffusion"> </StableDiffusion>
         <SDManager :app="app" ref="sd_manager"> </SDManager>
-        <AssetsManager ref="assets_manager"> </AssetsManager>
+        <AssetsManager :app="app" ref="assets_manager"> </AssetsManager>
         
         <div v-if="app_state.is_start_screen">
             <transition name="slide_show">
                 <SplashScreen v-if="app_state.show_splash_screen"></SplashScreen>
             </transition>
         </div>
-        <ApplicationFrame ref="app_frame" v-else :title="current_applet_title + ' - ' + 'DiffusionBee'" :sidebar_item_on_click="sidebar_item_on_click"
+        <ApplicationFrame ref="app_frame" v-else :title="current_applet_title + ' - ' + 'Diffusion4Mac'" :sidebar_item_on_click="sidebar_item_on_click"
         :sidebar_items="
             (all_pages_ready ) ?  $refs.router.all_sidebar_items : []
         " :selected_sidebar_item_id="current_selected_tab"
@@ -30,7 +30,7 @@
 
         </ApplicationFrame>
 
-        <LoaderModal v-if="app_state.global_loader_modal_msg" :loading_percentage="-1"  :loading_title="app_state.global_loader_modal_msg"> </LoaderModal>
+        <LoaderModal v-if="app_state.global_loader_modal_msg" :loading_percentage="app_state.global_loader_percentage"  :loading_title="app_state.global_loader_modal_msg"> </LoaderModal>
 
     </div>
 </template>
@@ -108,6 +108,27 @@ export default
         }
         if(data.settings.notification_sound == undefined)
             data.settings.notification_sound = true
+
+        if(data.settings.hf_token == undefined)
+            data.settings.hf_token = ""
+
+        if(data.settings.gemma_preferred_model == undefined)
+            data.settings.gemma_preferred_model = "gemma4:e4b"
+
+        if(data.settings.loras == undefined)
+            data.settings.loras = {}
+
+        if(data.settings.custom_loras == undefined)
+            data.settings.custom_loras = []
+
+        if(data.settings.lora_stacking == undefined)
+            data.settings.lora_stacking = false
+
+        if(data.settings.lora_strengths == undefined)
+            data.settings.lora_strengths = {}
+
+        if(data.settings.save_exif_meta == undefined)
+            data.settings.save_exif_meta = false
 
         if(!data.custom_models){
             data.custom_models = {}
@@ -237,6 +258,7 @@ export default
             logs : "",
 
             global_loader_modal_msg : "",
+            global_loader_percentage: -1,
             registered_ext_applets : {}, // {id, title, desc, icon, inputs, outputs }
             app_data: {history : {}},
         };

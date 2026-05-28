@@ -50,6 +50,8 @@ export default {
 
             if(this.app.is_mounted && this.app.assets_manager.downloaded_assets[asset_id] && this.app.assets_manager.downloaded_assets[asset_id].status == 'done'){
                 return true
+            } else if (this.app.is_mounted && this.app.assets_manager.downloading[asset_id] && this.app.assets_manager.downloading[asset_id].status == 'done') {
+                return true
             } else {
                 return false
             }

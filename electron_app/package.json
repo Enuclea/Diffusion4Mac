@@ -1,9 +1,9 @@
 {
-  "name": "DiffusionBee",
+  "name": "diffusion4mac",
   "version": "2.3.0",
   "build_number": "0029",
-  "website": "https://diffusionbee.com",
-  "description": "Diffusion Bee - Stable Diffusion App.",
+  "website": "https://github.com/enuclea/Diffusion4Mac",
+  "description": "Diffusion4Mac - Stable Diffusion App.",
   "is_dev": false,
   "private": true,
   "scripts": {

@@ -2,6 +2,7 @@ import { ipcMain, dialog, app } from 'electron'
 
 var win;
 var python;
+var ollama_proc;
 
 var py_buffer = "";
 var is_app_closing = false;
@@ -16,6 +17,24 @@ function start_bridge() {
 
     console.log("starting bridge")
     const fs = require('fs')
+
+    // Start Ollama on port 11435
+    console.log("starting ollama on port 11435")
+    let ollama_env = Object.assign({}, process.env, { OLLAMA_HOST: '127.0.0.1:11435' })
+    try {
+        ollama_proc = require('child_process').spawn('ollama', ['serve'], { env: ollama_env })
+        ollama_proc.stderr.on('data', (data) => {
+            console.log("Ollama stderr:", data.toString())
+        })
+        ollama_proc.stdout.on('data', (data) => {
+            console.log("Ollama stdout:", data.toString())
+        })
+        ollama_proc.on('error', (err) => {
+            console.error("Failed to spawn Ollama:", err)
+        })
+    } catch(e) {
+        console.error("Error starting Ollama serve:", e)
+    }
 
     let script_path = process.env.PY_SCRIPT || "../backends/stable_diffusion/diffusionbee_backend.py"; 
     let bin_path =  process.env.BIN_PATH;
@@ -148,7 +167,9 @@ app.on('window-all-closed', () => {
         is_app_closing = true;
         python.kill();
     }
- 
+    if (ollama_proc) {
+        ollama_proc.kill();
+    }
 })
 
 

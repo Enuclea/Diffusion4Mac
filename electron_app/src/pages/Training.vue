@@ -27,6 +27,7 @@ Training.title = "Training"
 Training.icon = "file"
 Training.img_icon = require("../assets/imgs/page_icon_imgs/training.png")
 Training.home_category = "main"
+Training.sidebar_show = "never"
 Training.description = "Train a model on your own images using DreamBooth."
 // add this to the always_on_pages to the PagesRouter
 

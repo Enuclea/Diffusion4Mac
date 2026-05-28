@@ -447,7 +447,20 @@ function run_realesrgan(input_path , cb ){
     const path = require('path');
     let out_path = "/tmp/"+Math.random()+".png";
     const fs = require('fs');
-    let bin_path =  process.env.REALESRGAN_BIN || path.join(path.dirname(__dirname), 'core' , 'realesrgan_ncnn_macos' );
+    let bin_path =  process.env.REALESRGAN_BIN;
+    if (!bin_path) {
+        let local_path = path.join(path.dirname(__dirname), 'core' , 'realesrgan_ncnn_macos' );
+        if (fs.existsSync(local_path)) {
+            bin_path = local_path;
+        } else {
+            let app_path = '/Applications/DiffusionBee.app/Contents/Resources/core/realesrgan_ncnn_macos';
+            if (fs.existsSync(app_path)) {
+                bin_path = app_path;
+            } else {
+                bin_path = local_path;
+            }
+        }
+    }
     let weights_path = bin_path.replaceAll("realesrgan_ncnn_macos" , "models") + "/";
     let proc = require('child_process').spawn( bin_path  , ['-m' , weights_path , '-i' , input_path , '-o' , out_path ]);
 
@@ -559,7 +572,7 @@ ipcMain.handle('run_realesrgan', async (event, arg) => {
     return result
 })
 
-// ipcRenderer.invoke('run_realesrgan', '/Users/divamgupta/Downloads/333.png' ).then((result) => {
+// ipcRenderer.invoke('run_realesrgan', '/path/to/image.png' ).then((result) => {
 //     alert(result)
 //   })
 

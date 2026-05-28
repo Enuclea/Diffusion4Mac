@@ -77,7 +77,6 @@ import LoaderModal from '../components_bare/LoaderModal.vue'
 import BasicSDApplet from "../components/BasicSDApplet.vue"
 import ImageCanvas from '../components_bare/ImageCanvas.vue'
 
-import {find_in_form_recursive} from "../utils.js"
 import {inpaint_assets , prep_sd_optins} from "../utils/in_out_paint_utils.js"
 
 
@@ -129,18 +128,8 @@ const Inpainting = {
             return ['inpainting']
         },
 
-        model_options_types(){
-            return ["sd_model" ,"sd_model_inpaint"]
-            
-        },
-
         input_form_elements_processed(){
             let form_or = require("../forms/sd_options_adv.json")
-            form_or = JSON.parse(JSON.stringify(form_or))
-            let el = find_in_form_recursive( "selected_sd_model" , form_or)
-
-            el['options'] = [ "SD1.5_Inpainting" , "Default_SD1.5" ]
-
             return form_or
         }
     },

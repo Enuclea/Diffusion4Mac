@@ -1,47 +1,34 @@
-## How to run DiffusionBee from source 
+## How to run Diffusion4Mac from source 
 
-Install the following
-- Miniforge 
-- Nodejs v16
+### Prerequisites
+Install the following:
+- Conda (Miniforge recommended)
+- Node.js (v16 or higher)
 
-
-Clone the repo: 
-
-```
-git clone https://github.com/divamgupta/diffusionbee-stable-diffusion-ui
-
+### 1. Clone the repository: 
+```bash
+git clone https://github.com/enuclea/Diffusion4Mac
 ```
 
-
-
-
-Create the conda environment and activate it:
-
-```
-conda create -n diffusion_bee_env  python=3.9.10
-conda activate diffusion_bee_env
-
+### 2. Create the conda environment and activate it:
+```bash
+conda create -n diffusion4mac_env python=3.9.10
+conda activate diffusion4mac_env
 ```
 
-Install the python packages :
-
-```
-cd diffusionbee-stable-diffusion-ui/backends/stable_diffusion
+### 3. Install Python dependencies:
+```bash
+cd Diffusion4Mac/backends/stable_diffusion
 pip install -r requirements.txt
-
 ```
 
-Install the npm packages 
-
-```
-cd diffusionbee-stable-diffusion-ui/electron_app
+### 4. Install Frontend dependencies:
+```bash
+cd ../../electron_app
 npm install
 ```
 
-
-Run the app
-
-```
-npm run electron:serve 
-
+### 5. Run the application in development mode:
+```bash
+npm run electron:serve
 ```

@@ -10,7 +10,10 @@
             </span>
             
             <div style="margin-bottom:30px"></div>
-            <b-progress v-if="loading_percentage >= 0 "  :value="loading_percentage" style="height: 10px;"></b-progress>
+            <div v-if="loading_percentage >= 0">
+                <b-progress :value="loading_percentage" style="height: 10px;"></b-progress>
+                <div style="margin-top: 8px; font-weight: 600; font-size: 14px;">{{loading_percentage}}%</div>
+            </div>
 
             <div style="margin-bottom:10px"></div>
             <p style="font-variant-numeric: tabular-nums;margin-bottom: 0px;">{{loading_desc}}

@@ -189,14 +189,14 @@ export default {
                 }
 
                 if(form_el.cond_include_in != undefined && form_el.cond_include_in.length > 0  ){
-                    if(this.are_form_entry_conditions_safisfied(form_el.cond_include_in)){
-                        is_allowed = true 
+                    if(!this.are_form_entry_conditions_safisfied(form_el.cond_include_in)){
+                        is_allowed = false 
                     } 
                 }
 
                 if(form_el.cond_include_in_AND != undefined && form_el.cond_include_in_AND.length > 0  ){
-                    if(this.are_form_entry_conditions_safisfied_AND(form_el.cond_include_in_AND)){
-                        is_allowed = true 
+                    if(!this.are_form_entry_conditions_safisfied_AND(form_el.cond_include_in_AND)){
+                        is_allowed = false 
                     } 
                 }
 

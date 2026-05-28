@@ -30,12 +30,13 @@ import Txt2Img from "../pages/Txt2Img.vue"
 import Img2Img from "../pages/Img2Img.vue"
 import Training from "../pages/Training.vue"
 import Inpainting from "../pages/Inpainting.vue"
+import PromptDesigner from "../pages/PromptDesigner.vue"
+import LoraStore from "../pages/LoraStore.vue"
 
 import History from "../pages/History.vue"
 import Homepage from "../pages/Homepage.vue"
 import ModelStore from "../pages/ModelStore.vue"
 import Logs from "../pages/Logs.vue"
-import ContactUs from "../pages/ContactUs.vue"
 
 import Settings from "../pages/Settings.vue"
 import PostProcessImage from "../pages/PostProcessImage.vue"
@@ -50,7 +51,7 @@ export default {
     },
     components: {
         Txt2Img, Img2Img , Inpainting , AppletPage , History, Homepage , ModelStore, 
-        Logs, ContactUs , Settings, PostProcessImage, Training
+        Logs, Settings, PostProcessImage, Training, PromptDesigner, LoraStore
     },
     mounted() {
         this.app.functions.switch_page = this.switch_page; 
@@ -59,7 +60,7 @@ export default {
     data() {
 
         let always_on_pages = { Homepage:Homepage  , Txt2Img:Txt2Img , Img2Img:Img2Img , 
-            Inpainting:Inpainting , PostProcessImage:PostProcessImage  , ModelStore:ModelStore , History:History, Logs:Logs, Settings:Settings , Training:Training, ContactUs:ContactUs  }
+            Inpainting:Inpainting , PostProcessImage:PostProcessImage  , ModelStore:ModelStore , History:History, Logs:Logs, Settings:Settings , Training:Training, PromptDesigner:PromptDesigner, LoraStore:LoraStore }
 
         let last_opened_timmings = {}
 

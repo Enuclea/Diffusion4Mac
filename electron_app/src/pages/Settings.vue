@@ -20,6 +20,65 @@
         </div>
         <hr>
 
+        <div class="setting_box">
+            <div class="settings_left">
+                <h3>Hugging Face Token</h3>
+                <p>Enter your Hugging Face User Access Token (read permission) to download gated models like FLUX.2 [klein].</p>
+                <input 
+                    type="password" 
+                    v-model="app.app_state.app_data.settings.hf_token" 
+                    placeholder="hf_..." 
+                    class="form-control" 
+                    style="max-width: 400px; margin-top: 8px;"
+                />
+            </div>
+        </div>
+        <hr>
+
+        <div class="setting_box">
+            <div class="settings_left">
+                <h3>Preferred Gemma Model</h3>
+                <p>Choose the default Gemma model used for AI Assist rewrite and image prompt description.</p>
+                <select 
+                    v-model="app.app_state.app_data.settings.gemma_preferred_model" 
+                    class="form-control" 
+                    style="max-width: 400px; margin-top: 8px; background-color: var(--input-bg-color, #2b2b2b); color: var(--text-color, #ffffff); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; padding: 6px 12px; font-size: 0.9rem; outline: none; cursor: pointer;"
+                >
+                    <option value="gemma4:e4b" style="background-color: #1e1e1e;">Gemma 4 [e4b] (Recommended - 4B parameters)</option>
+                    <option value="gemma4:e2b" style="background-color: #1e1e1e;">Gemma 4 [e2b] (Lighter - 2B parameters)</option>
+                </select>
+            </div>
+        </div>
+        <hr>
+
+        <div class="setting_box">
+            <div class="settings_left">
+                <h3>Allow LoRA Stacking</h3>
+                <p>Allow enabling more than one LoRA simultaneously. <span style="color: #ff9800; font-weight: 500;">Caution: Enabling multiple LoRAs simultaneously can degrade image quality or cause conflicts if they are not designed to work together.</span></p>
+            </div>
+            <div style="float:right;margin-right: 9px;align-self: center;" >
+                <label class="switch">
+                    <input type="checkbox" v-model="app.app_state.app_data.settings.lora_stacking">
+                    <span class="toggle round"></span>
+                </label>
+            </div>
+        </div>
+        <hr>
+
+        <div class="setting_box">
+            <div class="settings_left">
+                <h3>Save Metadata to EXIF</h3>
+                <p>Saves all generation metadata (prompt, seed, model, and active LoRAs) as JSON directly inside the exported image's EXIF user description tag.</p>
+            </div>
+            <div style="float:right;margin-right: 9px;align-self: center;" >
+                <label class="switch">
+                    <input type="checkbox" v-model="app.app_state.app_data.settings.save_exif_meta">
+                    <span class="toggle round"></span>
+                </label>
+            </div>
+        </div>
+        <hr>
+
 
     </div>
 </template>
@@ -44,7 +103,7 @@ Settings.title = "Settings"
 Settings.icon = "tools"
 Settings.img_icon = require("../assets/imgs/page_icon_imgs/settings.png")
 Settings.home_category = "pages"
-Settings.hide_in_sidebar = true
+Settings.sidebar_show = "always"
 
 // add this to the always_on_pages to the PagesRouter
 

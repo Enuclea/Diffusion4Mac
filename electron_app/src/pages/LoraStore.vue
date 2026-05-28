@@ -241,8 +241,8 @@ const LoraStore = {
                 family: "flux_schnell",
                 keyword: "",
                 asset_path: "",
-                min_weight: -5.0,
-                max_weight: 5.0
+                min_weight: -2.0,
+                max_weight: 2.0
             },
             import_error: ""
         };
@@ -251,26 +251,12 @@ const LoraStore = {
         active_schnell_loras() {
             if (!this.app.is_mounted || !this.app.app_state.app_data.settings) return this.schnell_loras;
             const custom = (this.app.app_state.app_data.settings.custom_loras || [])
-                .map(x => {
-                    let min_w = x.min_weight !== undefined ? x.min_weight : -5.0;
-                    let max_w = x.max_weight !== undefined ? x.max_weight : 5.0;
-                    if (min_w === -2.0) min_w = -5.0;
-                    if (max_w === 2.0) max_w = 5.0;
-                    return { ...x, min_weight: min_w, max_weight: max_w };
-                })
                 .filter(x => x.family === 'flux_schnell');
             return [...this.schnell_loras, ...custom];
         },
         active_klein_loras() {
             if (!this.app.is_mounted || !this.app.app_state.app_data.settings) return this.klein_loras;
             const custom = (this.app.app_state.app_data.settings.custom_loras || [])
-                .map(x => {
-                    let min_w = x.min_weight !== undefined ? x.min_weight : -5.0;
-                    let max_w = x.max_weight !== undefined ? x.max_weight : 5.0;
-                    if (min_w === -2.0) min_w = -5.0;
-                    if (max_w === 2.0) max_w = 5.0;
-                    return { ...x, min_weight: min_w, max_weight: max_w };
-                })
                 .filter(x => x.family === 'flux_klein');
             return [...this.klein_loras, ...custom];
         }
@@ -357,8 +343,8 @@ const LoraStore = {
                 family: form.family,
                 status: 'done',
                 is_custom: true,
-                min_weight: typeof form.min_weight === 'number' && !isNaN(form.min_weight) ? form.min_weight : -5.0,
-                max_weight: typeof form.max_weight === 'number' && !isNaN(form.max_weight) ? form.max_weight : 5.0
+                min_weight: typeof form.min_weight === 'number' && !isNaN(form.min_weight) ? form.min_weight : -2.0,
+                max_weight: typeof form.max_weight === 'number' && !isNaN(form.max_weight) ? form.max_weight : 2.0
             };
             
             if (!this.app.app_state.app_data.settings.custom_loras) {
@@ -371,8 +357,8 @@ const LoraStore = {
             this.import_form.title = "";
             this.import_form.keyword = "";
             this.import_form.asset_path = "";
-            this.import_form.min_weight = -5.0;
-            this.import_form.max_weight = 5.0;
+            this.import_form.min_weight = -2.0;
+            this.import_form.max_weight = 2.0;
         },
         removeCustomLora(lora_id) {
             // Turn off setting first

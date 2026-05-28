@@ -33,6 +33,15 @@
             </div>
             
             <div class="form_group">
+                <label>Imagen Model</label>
+                <select v-model="selectedModel" class="form_select" :disabled="loading">
+                    <option v-for="model in availableModels" :key="model.name" :value="model.name">
+                        {{ model.displayName }}
+                    </option>
+                </select>
+            </div>
+            
+            <div class="form_group">
                 <label>Aspect Ratio</label>
                 <div class="aspect_ratio_selector">
                     <div 
@@ -94,7 +103,7 @@
                     <div class="gemini_symbol">☁️</div>
                 </div>
                 <h3>Cloud Image Generation</h3>
-                <p>Enter a description and click generate to invoke Google Imagen 3. Generations require an active internet connection.</p>
+                <p>Enter a description and click generate to invoke Google Imagen. Generations require an active internet connection.</p>
                 <div class="disclaimer_card">
                     <p>⚠️ <strong>Direct Connection:</strong> Calls are made directly to Google AI Studio REST endpoints using the Gemini API Key saved in your local settings.</p>
                 </div>
@@ -116,6 +125,13 @@ const GeminiStudio = {
             prompt: "",
             enhancePromptFlag: false,
             selectedRatio: "1:1",
+            selectedModel: "imagen-3.0-generate-002",
+            availableModels: [
+                { displayName: "Imagen 4 Generate (Standard)", name: "imagen-4.0-generate-001" },
+                { displayName: "Imagen 4 Ultra Generate", name: "imagen-4.0-ultra-generate-001" },
+                { displayName: "Imagen 4 Fast Generate", name: "imagen-4.0-fast-generate-001" },
+                { displayName: "Imagen 3 Generate (Legacy)", name: "imagen-3.0-generate-002" }
+            ],
             loading: false,
             loadingTitle: "",
             loadingDesc: "",
@@ -135,7 +151,55 @@ const GeminiStudio = {
             return this.app?.app_state?.app_data?.settings?.gemini_api_key || "";
         }
     },
+    watch: {
+        apiKey: {
+            handler(newVal) {
+                if (newVal) {
+                    this.fetchAvailableModels();
+                }
+            },
+            immediate: true
+        }
+    },
     methods: {
+        async fetchAvailableModels() {
+            if (!this.apiKey || !this.apiKey.trim()) return;
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${this.apiKey.trim()}`;
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error ${response.status}`);
+                }
+                const data = await response.json();
+                if (data.models && Array.isArray(data.models)) {
+                    const imagenModels = data.models.filter(m => 
+                        m.name && m.name.toLowerCase().includes('imagen')
+                    );
+                    
+                    if (imagenModels.length > 0) {
+                        const formatted = imagenModels.map(m => {
+                            const shortName = m.name.replace('models/', '');
+                            let displayName = m.displayName || shortName;
+                            return {
+                                name: shortName,
+                                displayName: displayName
+                            };
+                        });
+                        
+                        this.availableModels = formatted;
+                        
+                        // If current selectedModel is not in the fetched list, select standard one or the first one
+                        const exists = this.availableModels.some(m => m.name === this.selectedModel);
+                        if (!exists) {
+                            const standard = this.availableModels.find(m => m.name.includes('generate-001') || m.name.includes('generate-002'));
+                            this.selectedModel = standard ? standard.name : this.availableModels[0].name;
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("Error fetching available models:", err);
+            }
+        },
         async generate() {
             if (!this.prompt.trim()) {
                 this.app.show_toast("Please enter a prompt");
@@ -160,7 +224,7 @@ const GeminiStudio = {
                 }
                 
                 this.loadingTitle = "Generating image...";
-                this.loadingDesc = "Imagen 3 is generating your cloud image";
+                this.loadingDesc = "Imagen is generating your cloud image";
                 
                 const b64Data = await this.generateImageCall(finalPrompt, this.selectedRatio, this.apiKey);
                 
@@ -185,7 +249,7 @@ const GeminiStudio = {
             }
         },
         async enhancePromptCall(userPrompt, apiKey) {
-            const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
             const payload = {
                 contents: [{
                     parts: [{
@@ -219,7 +283,7 @@ const GeminiStudio = {
             }
         },
         async generateImageCall(prompt, aspectRatio, apiKey) {
-            const url = `https://generativelanguage.googleapis.com/v1/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.selectedModel}:predict?key=${apiKey}`;
             const payload = {
                 instances: [
                     {
@@ -403,6 +467,25 @@ export default GeminiStudio;
 }
 
 .form_textarea:focus {
+    border-color: #3E7BFA;
+}
+
+.form_select {
+    width: 100%;
+    background-color: var(--options-input-bg);
+    color: var(--text-color-solid);
+    border: 1px solid var(--border-color-invert);
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 0.9rem;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.form_select:focus {
     border-color: #3E7BFA;
 }
 

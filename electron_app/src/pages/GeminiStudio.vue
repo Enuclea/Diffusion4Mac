@@ -219,12 +219,18 @@ const GeminiStudio = {
             }
         },
         async generateImageCall(prompt, aspectRatio, apiKey) {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages?key=${apiKey}`;
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
             const payload = {
-                prompt: prompt,
-                numberOfImages: 1,
-                outputMimeType: "image/png",
-                aspectRatio: aspectRatio
+                instances: [
+                    {
+                        prompt: prompt
+                    }
+                ],
+                parameters: {
+                    numberOfImages: 1,
+                    outputMimeType: "image/png",
+                    aspectRatio: aspectRatio
+                }
             };
             
             const response = await fetch(url, {
@@ -241,8 +247,8 @@ const GeminiStudio = {
             }
             
             const data = await response.json();
-            if (data.generatedImages && data.generatedImages[0] && data.generatedImages[0].image && data.generatedImages[0].image.imageBytes) {
-                return data.generatedImages[0].image.imageBytes;
+            if (data.predictions && data.predictions[0] && data.predictions[0].bytesBase64Encoded) {
+                return data.predictions[0].bytesBase64Encoded;
             } else {
                 throw new Error("Invalid response format from Imagen API");
             }

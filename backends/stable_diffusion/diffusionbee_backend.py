@@ -55,6 +55,30 @@ def load_image(image_path):
     except:
         return None
 
+def resize_image_aspect(img, max_dim=1024):
+    if not img:
+        return None
+    w, h = img.size
+    if w <= max_dim and h <= max_dim:
+        new_w = (w // 16) * 16
+        new_h = (h // 16) * 16
+        if new_w == w and new_h == h:
+            return img
+        resample_filter = getattr(Image, "Resampling", Image).LANCZOS
+        return img.resize((new_w, new_h), resample_filter)
+
+    if w > h:
+        new_w = max_dim
+        new_h = int(h * (max_dim / w))
+    else:
+        new_h = max_dim
+        new_w = int(w * (max_dim / h))
+
+    new_w = max(16, (new_w // 16) * 16)
+    new_h = max(16, (new_h // 16) * 16)
+    resample_filter = getattr(Image, "Resampling", Image).LANCZOS
+    return img.resize((new_w, new_h), resample_filter)
+
 def main():
     print("sdbk mdld") # notify UI model logic is ready to load/run
 
@@ -167,7 +191,12 @@ def main():
                 else:
                     lora_weights = [1.0] * len(lora_paths)
 
-            # Load all available guide images
+            # Get target image dimensions to resize guide/reference images accordingly
+            target_width = data.get("img_width", 1024)
+            target_height = data.get("img_height", 1024)
+            max_dim = max(target_width, target_height)
+
+            # Load all available guide images and downsize them to target size
             guide_images = []
             guide_image_paths = []
             for key in ["guide_img_1", "guide_img_2", "guide_img_3", "guide_img_4"]:
@@ -176,12 +205,10 @@ def main():
                     guide_image_paths.append((key, path_val))
                     img = load_image(path_val)
                     if img:
+                        img = resize_image_aspect(img, max_dim)
                         guide_images.append(img)
 
             # Handle parsed options
-            print(f"Backend options: model_selection={model_selection}, input_image_path={input_image_path}")
-            print(f"Loaded {len(guide_images)} guide images.")
-
             print(f"Backend options: model_selection={model_selection}, input_image_path={input_image_path}")
             print(f"Loaded {len(guide_images)} guide images.")
 
@@ -287,6 +314,8 @@ def main():
             generator = torch.Generator(device=device).manual_seed(seed)
 
             input_image = load_image(input_image_path)
+            if input_image:
+                input_image = resize_image_aspect(input_image, max_dim)
 
             for i in range(num_imgs):
                 print(f"sdbk dnpr {i}/{num_imgs}")

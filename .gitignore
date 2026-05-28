@@ -188,3 +188,12 @@ Temporary Items
 
 
 pretrained_weights/
+build/
+electron_app/core/
+backend_debug.log
+out.log
+err.log
+test_offload.py
+backends/stable_diffusion/test_mem.py
+
+

@@ -20,7 +20,10 @@ function start_bridge() {
 
     // Start Ollama on port 11435
     console.log("starting ollama on port 11435")
-    let ollama_env = Object.assign({}, process.env, { OLLAMA_HOST: '127.0.0.1:11435' })
+    let custom_path = process.env.PATH || '';
+    if (!custom_path.includes('/usr/local/bin')) custom_path = '/usr/local/bin:' + custom_path;
+    if (!custom_path.includes('/opt/homebrew/bin')) custom_path = '/opt/homebrew/bin:' + custom_path;
+    let ollama_env = Object.assign({}, process.env, { OLLAMA_HOST: '127.0.0.1:11435', PATH: custom_path })
     try {
         ollama_proc = require('child_process').spawn('ollama', ['serve'], { env: ollama_env })
         ollama_proc.stderr.on('data', (data) => {

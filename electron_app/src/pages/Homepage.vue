@@ -10,7 +10,7 @@
                     @click="item.id === 'Training' ? null : app.functions.switch_page(item.id)" 
                     class="select_app"
                     :class="{ 'select_app_disabled': item.id === 'Training' }"> 
-                    <div class="select_app_image" v-bind:style="{ 'background-image': 'url(' +( item.img_icon || default_img )+ ')' }"></div>
+                    <div class="select_app_image" v-bind:style="{ 'background-image': `url('${item.img_icon || default_img}')` }"></div>
                     <div class="select_app_desc"> 
                         <div class="select_app_text">
                             <h2>{{item.text}}</h2> 

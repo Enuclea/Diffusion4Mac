@@ -178,13 +178,9 @@ def main():
                     if img:
                         guide_images.append(img)
 
-            with open("backend_debug.log", "a") as f:
-                f.write(f"\n--- NEW RUN ---\n")
-                f.write(f"Parsed data: {json.dumps(data, indent=2)}\n")
-                f.write(f"model_selection: {model_selection}\n")
-                f.write(f"input_image_path: {input_image_path}\n")
-                f.write(f"guide_image_paths: {guide_image_paths}\n")
-                f.write(f"Loaded guide_images count: {len(guide_images)}\n")
+            # Handle parsed options
+            print(f"Backend options: model_selection={model_selection}, input_image_path={input_image_path}")
+            print(f"Loaded {len(guide_images)} guide images.")
 
             print(f"Backend options: model_selection={model_selection}, input_image_path={input_image_path}")
             print(f"Loaded {len(guide_images)} guide images.")
@@ -212,13 +208,27 @@ def main():
                 if model_selection == "Flux Klein" and "Flux2KleinPipeline" in globals():
                     # use standard pipeline for klein multi-image editing or standard text2img
                     pipe = Flux2KleinPipeline.from_pretrained(model_id, torch_dtype=dtype, token=hf_token)
-                    pipe.to(device)
+                    if hasattr(pipe, "enable_model_cpu_offload"):
+                        try:
+                            pipe.enable_model_cpu_offload(device=device)
+                        except Exception as e:
+                            print(f"sdbk warn CPU offload failed: {e}")
+                            pipe.to(device)
+                    else:
+                        pipe.to(device)
                     if "Flux2KleinInpaintPipeline" in globals():
                         pipe_inpaint = Flux2KleinInpaintPipeline(**pipe.components)
                 else:
                     # Schnell or standard Klein
                     pipe = FluxPipeline.from_pretrained(model_id, torch_dtype=dtype, token=hf_token)
-                    pipe.to(device)
+                    if hasattr(pipe, "enable_model_cpu_offload"):
+                        try:
+                            pipe.enable_model_cpu_offload(device=device)
+                        except Exception as e:
+                            print(f"sdbk warn CPU offload failed: {e}")
+                            pipe.to(device)
+                    else:
+                        pipe.to(device)
                     pipe_img2img = FluxImg2ImgPipeline(**pipe.components)
                     if "FluxInpaintPipeline" in globals():
                         pipe_inpaint = FluxInpaintPipeline(**pipe.components)
@@ -273,8 +283,6 @@ def main():
                         print(f"Error setting active adapters: {e}")
 
             apply_loras(pipe, lora_paths, lora_weights)
-            apply_loras(pipe_img2img, lora_paths, lora_weights)
-            apply_loras(pipe_inpaint, lora_paths, lora_weights)
 
             generator = torch.Generator(device=device).manual_seed(seed)
 
@@ -304,82 +312,77 @@ def main():
 
                     log_msg = f"Running Inpainting with input size {input_image.size} (rounded to {inpaint_w}x{inpaint_h}) and mask size {mask_image.size}"
                     print(log_msg)
-                    with open("backend_debug.log", "a") as f:
-                        f.write(log_msg + "\n")
 
-                    if model_selection == "Flux Klein" and pipe_inpaint is not None:
-                        out = pipe_inpaint(
-                            prompt=prompt,
-                            image=input_image,
-                            mask_image=mask_image,
-                            height=inpaint_h,
-                            width=inpaint_w,
-                            num_inference_steps=num_steps,
-                            generator=generator
-                        )
-                    elif pipe_inpaint is not None:
-                        out = pipe_inpaint(
-                            prompt=prompt,
-                            image=input_image,
-                            mask_image=mask_image,
-                            height=inpaint_h,
-                            width=inpaint_w,
-                            guidance_scale=guidance_scale,
-                            num_inference_steps=num_steps,
-                            generator=generator
-                        )
-                    else:
-                        raise ValueError("Inpainting pipeline is not initialized or not supported.")
+                    with torch.inference_mode():
+                        if model_selection == "Flux Klein" and pipe_inpaint is not None:
+                            out = pipe_inpaint(
+                                prompt=prompt,
+                                image=input_image,
+                                mask_image=mask_image,
+                                height=inpaint_h,
+                                width=inpaint_w,
+                                num_inference_steps=num_steps,
+                                generator=generator
+                            )
+                        elif pipe_inpaint is not None:
+                            out = pipe_inpaint(
+                                prompt=prompt,
+                                image=input_image,
+                                mask_image=mask_image,
+                                height=inpaint_h,
+                                width=inpaint_w,
+                                guidance_scale=guidance_scale,
+                                num_inference_steps=num_steps,
+                                generator=generator
+                            )
+                        else:
+                            raise ValueError("Inpainting pipeline is not initialized or not supported.")
                 elif model_selection == "Flux Klein" and "Flux2KleinPipeline" in globals():
                     ref_imgs = guide_images + ([input_image] if input_image else [])
                     if ref_imgs:
                         log_msg = f"Running Flux2KleinPipeline with {len(ref_imgs)} reference images: " + ", ".join([str(img.size) for img in ref_imgs])
                         print(log_msg)
-                        with open("backend_debug.log", "a") as f:
-                            f.write(log_msg + "\n")
-                        out = pipe(
-                            prompt=prompt,
-                            image=ref_imgs,
-                            num_inference_steps=num_steps,
-                            generator=generator
-                        )
+                        with torch.inference_mode():
+                            out = pipe(
+                                prompt=prompt,
+                                image=ref_imgs,
+                                num_inference_steps=num_steps,
+                                generator=generator
+                            )
                     else:
                         print("Running Flux2KleinPipeline as Text2Img")
-                        with open("backend_debug.log", "a") as f:
-                            f.write("Running Flux2KleinPipeline as Text2Img\n")
-                        out = pipe(
-                            prompt=prompt,
-                            num_inference_steps=num_steps,
-                            generator=generator,
-                            height=data.get("img_height", 1024),
-                            width=data.get("img_width", 1024)
-                        )
+                        with torch.inference_mode():
+                            out = pipe(
+                                prompt=prompt,
+                                num_inference_steps=num_steps,
+                                generator=generator,
+                                height=data.get("img_height", 1024),
+                                width=data.get("img_width", 1024)
+                            )
                 else:
                     ref_image = input_image or (guide_images[0] if guide_images else None)
                     if ref_image:
                         print("Running FluxImg2ImgPipeline")
-                        with open("backend_debug.log", "a") as f:
-                            f.write(f"Running FluxImg2ImgPipeline with image size {ref_image.size}\n")
-                        out = pipe_img2img(
-                            prompt=prompt,
-                            image=ref_image,
-                            guidance_scale=guidance_scale,
-                            num_inference_steps=num_steps,
-                            generator=generator,
-                            strength=0.8
-                        )
+                        with torch.inference_mode():
+                            out = pipe_img2img(
+                                prompt=prompt,
+                                image=ref_image,
+                                guidance_scale=guidance_scale,
+                                num_inference_steps=num_steps,
+                                generator=generator,
+                                strength=0.8
+                            )
                     else:
                         print("Running standard FluxPipeline Text2Img")
-                        with open("backend_debug.log", "a") as f:
-                            f.write("Running standard FluxPipeline Text2Img\n")
-                        out = pipe(
-                            prompt=prompt,
-                            guidance_scale=guidance_scale,
-                            num_inference_steps=num_steps,
-                            generator=generator,
-                            height=data.get("img_height", 1024),
-                            width=data.get("img_width", 1024)
-                        )
+                        with torch.inference_mode():
+                            out = pipe(
+                                prompt=prompt,
+                                guidance_scale=guidance_scale,
+                                num_inference_steps=num_steps,
+                                generator=generator,
+                                height=data.get("img_height", 1024),
+                                width=data.get("img_width", 1024)
+                            )
 
                 img = out.images[0]
 
@@ -404,14 +407,39 @@ def main():
                 ret_dict = {"generated_img_path": fpath}
                 print("sdbk nwim %s" % (json.dumps(ret_dict)))
 
+                # Clean up memory after each image in the batch
+                out = None
+                img = None
+                import gc
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                    if hasattr(torch.mps, 'empty_cache'):
+                        torch.mps.empty_cache()
+
         except Exception as e:
-            err_msg = f"Error processing: {e}\n{traceback.format_exc()}"
-            print(err_msg)
-            with open("backend_debug.log", "a") as f:
-                f.write(err_msg + "\n")
+            print(f"Exception during message handling: {e}")
             traceback.print_exc()
+        finally:
+            out = None
+            img = None
+            input_image = None
+            mask_image = None
+            ref_image = None
+            guide_images = None
+            ref_imgs = None
+            import gc
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                if hasattr(torch.mps, 'empty_cache'):
+                    torch.mps.empty_cache()
 
 if __name__ == "__main__":
+    import multiprocessing
+    multiprocessing.freeze_support()
     import traceback
     try:
         main()

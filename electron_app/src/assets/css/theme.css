@@ -145,9 +145,6 @@ body {
         color: rgba(255, 255, 255, 0.9);
         background-color: #F1F4FA;
     }
-    .logo_splash_screen {
-        content: url("..//logo_splash.png")
-    }
     .options_title_box {
         color: #484A54;
         display: flex;
@@ -285,9 +282,6 @@ body {
     .loader_box {
         color: rgba(255, 255, 255, 0.9);
         background-color: #303030;
-    }
-    .logo_splash_screen {
-        content: url("..//logo_splash_dark.png")
     }
     .moonloader {
         filter: invert(100%);

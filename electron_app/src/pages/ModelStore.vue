@@ -5,7 +5,7 @@
         <div v-if="downloaded_models_list.length > 0" class="icon_container">
 
             <div v-for="model in downloaded_models_list" :key="model.id" class="model_card">
-                 <div class="model_card_image" v-bind:style="{ 'background-image': 'url(' + (model.img_url || default_img_url )+ ')' }"></div>
+                 <div class="model_card_image" v-bind:style="{ 'background-image': `url('${model.img_url || default_img_url}')` }"></div>
                  <div class="card_desc"> 
                     <div class="card_text">
                         <h2> {{model.title || model.id}} </h2> 
@@ -24,7 +24,7 @@
         <div class="icon_container">
 
             <div v-for="model in not_downloaded_models_list" :key="model.id" class="model_card">
-                 <div class="model_card_image" v-bind:style="{ 'background-image': 'url(' + (model.img_url || default_img_url) + ')' }"></div>
+                 <div class="model_card_image" v-bind:style="{ 'background-image': `url('${model.img_url || default_img_url}')` }"></div>
                  <div class="card_desc"> 
                     <div class="card_text">
                         <h2> {{model.title || model.id}} </h2> 

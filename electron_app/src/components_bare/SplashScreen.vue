@@ -2,7 +2,7 @@
 <template>
     <div class="splash_screen">
         <Transition name="fade">
-            <img class="logo_splash_screen" v-if=show width="60%">
+            <img :src="is_dark ? require('../assets/logo_splash_dark.png') : require('../assets/logo_splash.png')" v-if=show width="60%">
         </Transition>
     </div>
 </template>
@@ -16,7 +16,8 @@ export default {
     },
     data() {
         return {
-            show:false
+            show:false,
+            is_dark: document.body.getAttribute('data-theme') === 'dark'
         };
     },
     methods: {

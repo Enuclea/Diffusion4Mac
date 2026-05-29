@@ -11,7 +11,7 @@ import { send_to_py } from "./py_vue_bridge.js"
 // contextBridge.exposeInMainWorld('ipcRenderer_on', ipcRenderer.on)
 
 
-function download_file(url, dest, md5_hash , onProgress, onSuccess, onError) {
+function download_file(url, dest, md5_hash , onProgress, onSuccess, onError, hf_token) {
     const downloadId = Date.now().toString() + Math.random().toString().substr(2);
     window.bind_ipc_download_on(downloadId, function(m){
         // progresss
@@ -30,7 +30,7 @@ function download_file(url, dest, md5_hash , onProgress, onSuccess, onError) {
         window.unbind_ipc_download_on(downloadId)
         onError(m)
     } )
-    window.ipcRenderer.send('download-file', url, dest, downloadId);
+    window.ipcRenderer.send('download-file', url, dest, downloadId, hf_token);
 }
 
 
@@ -39,7 +39,25 @@ export default {
     props: { app: Object },
     components: {},
     mounted() {
-
+        // Clean up corrupt/invalid downloaded files on startup
+        if (this.downloaded_assets) {
+            for (let asset_id in this.downloaded_assets) {
+                let asset = this.downloaded_assets[asset_id];
+                if (asset && asset.asset_path) {
+                    if (asset_id.includes('_detailed') || asset_id.includes('_cinematic') || asset_id.includes('_portrait') || asset_id.startsWith('custom_')) {
+                        let isValid = window.ipcRenderer.sendSync('check_file_valid', asset.asset_path);
+                        if (!isValid) {
+                            console.log("Removing invalid asset record and file: " + asset_id);
+                            window.ipcRenderer.sendSync('delete_file', asset.asset_path);
+                            Vue.delete(this.downloaded_assets, asset_id);
+                            if (this.downloading && this.downloading[asset_id]) {
+                                Vue.delete(this.downloading, asset_id);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     },
     data() {
         let downloaded_assets_storage = window.ipcRenderer.sendSync('load_data' , 'downloaded_assets.json'); // get from local storage
@@ -357,7 +375,12 @@ export default {
             Vue.set( that.downloading  , asset_id , asset_details)
             Vue.set( that.downloading[asset_id] , 'status' , 'downloading')
 
-            download_file( asset_details.url , dest_path , asset_hash  , on_progress , on_success ,  on_error )
+            let hf_token = "";
+            if (this.app && this.app.app_state && this.app.app_state.app_data && this.app.app_state.app_data.settings) {
+                hf_token = this.app.app_state.app_data.settings.hf_token || "";
+            }
+
+            download_file( asset_details.url , dest_path , asset_hash  , on_progress , on_success ,  on_error , hf_token )
 
         }
             

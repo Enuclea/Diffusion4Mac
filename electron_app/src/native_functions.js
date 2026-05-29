@@ -611,7 +611,7 @@ ipcMain.on('get_assets_dir', (event, arg) => {
 
 
 
-ipcMain.on('download-file', (event, url, dest, downloadId) => {
+ipcMain.on('download-file', (event, url, dest, downloadId, hf_token) => {
   
   const fs = require('fs');
   const path = require('path');
@@ -623,8 +623,14 @@ ipcMain.on('download-file', (event, url, dest, downloadId) => {
 
   let hash = crypto.createHash('md5');
 
+  let headers = {};
+  if (hf_token && url.includes("huggingface.co")) {
+      headers["Authorization"] = `Bearer ${hf_token}`;
+  }
+
   request.get({
       url,
+      headers,
       followRedirect: true,
       rejectUnauthorized: false, // ignore SSL certificate errors,
       timeout: 20000 , //20s
@@ -670,6 +676,19 @@ ipcMain.on('download-file', (event, url, dest, downloadId) => {
         }
         
     });
+ipcMain.on('check_file_valid', (event, fpath) => {
+  const fs = require('fs');
+  try {
+    if (fs.existsSync(fpath)) {
+      const stats = fs.statSync(fpath);
+      // LoRAs must be at least 1MB to be valid safetensors
+      event.returnValue = stats.size > 1024 * 1024;
+    } else {
+      event.returnValue = false;
+    }
+  } catch (e) {
+    event.returnValue = false;
+  }
 });
 
 

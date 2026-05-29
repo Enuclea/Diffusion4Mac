@@ -676,6 +676,7 @@ ipcMain.on('download-file', (event, url, dest, downloadId, hf_token) => {
         }
         
     });
+});
 ipcMain.on('check_file_valid', (event, fpath) => {
   const fs = require('fs');
   try {

@@ -300,11 +300,26 @@ def main():
                         loaded_weights.append(w)
                     except Exception as e:
                         print(f"Error loading LoRA {path}: {e}")
+                        is_corrupt = "checkpoint" in str(e) or "safetensors" in str(e) or "invalid" in str(e).lower()
+                        if is_corrupt:
+                            try:
+                                if os.path.exists(path):
+                                    print(f"Removing corrupt LoRA file: {path}")
+                                    os.remove(path)
+                            except Exception as de:
+                                print(f"Failed to remove corrupt LoRA: {de}")
                         # Fallback if adapter_name is not supported
                         try:
                             pipeline.load_lora_weights(path)
                         except Exception as e2:
                             print(f"Fallback loading failed: {e2}")
+                            if not is_corrupt and ("checkpoint" in str(e2) or "safetensors" in str(e2) or "invalid" in str(e2).lower()):
+                                try:
+                                    if os.path.exists(path):
+                                        print(f"Removing corrupt LoRA file: {path}")
+                                        os.remove(path)
+                                except Exception as de:
+                                    print(f"Failed to remove corrupt LoRA: {de}")
                 
                 # Set active adapters
                 if loaded_adapters and hasattr(pipeline, "set_adapters"):

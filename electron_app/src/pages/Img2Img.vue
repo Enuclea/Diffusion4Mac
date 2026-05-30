@@ -55,12 +55,23 @@ const Img2Img = {
        }, 
 
        postprocess_form_options_fn(options){
-            if(!options.img_width){
-                options.img_width = this.$refs.sd_applet.sd_options.input_img__AUX__width
+            let w = options.img_width || this.$refs.sd_applet.sd_options.input_img__AUX__width || 1024;
+            let h = options.img_height || this.$refs.sd_applet.sd_options.input_img__AUX__height || 1024;
+
+            const max_dim = 1024;
+            if (w > max_dim || h > max_dim) {
+                if (w > h) {
+                    h = Math.round(h * (max_dim / w));
+                    w = max_dim;
+                } else {
+                    w = Math.round(w * (max_dim / h));
+                    h = max_dim;
+                }
             }
-            if(!options.img_height){
-                options.img_height = this.$refs.sd_applet.sd_options.input_img__AUX__height
-            }
+
+            // Ensure dimensions are multiples of 16
+            options.img_width = Math.round(w / 16) * 16;
+            options.img_height = Math.round(h / 16) * 16;
 
             return options
        }

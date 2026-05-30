@@ -43,12 +43,17 @@ export default {
         if (this.downloaded_assets) {
             for (let asset_id in this.downloaded_assets) {
                 let asset = this.downloaded_assets[asset_id];
-                if (asset && asset.asset_path) {
+                // Ensure asset_path is set from asset_path_raw for HF-downloaded LoRAs
+                if (asset && !asset.asset_path && asset.asset_path_raw) {
+                    Vue.set(asset, 'asset_path', asset.asset_path_raw);
+                }
+                let file_path = (asset && (asset.asset_path || asset.asset_path_raw)) || null;
+                if (file_path) {
                     if (asset_id.includes('_detailed') || asset_id.includes('_cinematic') || asset_id.includes('_portrait') || asset_id.startsWith('custom_')) {
-                        let isValid = window.ipcRenderer.sendSync('check_file_valid', asset.asset_path);
+                        let isValid = window.ipcRenderer.sendSync('check_file_valid', file_path);
                         if (!isValid) {
                             console.log("Removing invalid asset record and file: " + asset_id);
-                            window.ipcRenderer.sendSync('delete_file', asset.asset_path);
+                            window.ipcRenderer.sendSync('delete_file', file_path);
                             Vue.delete(this.downloaded_assets, asset_id);
                             if (this.downloading && this.downloading[asset_id]) {
                                 Vue.delete(this.downloading, asset_id);
@@ -172,8 +177,8 @@ export default {
             Vue.delete(this.downloading, asset_id );
             Vue.delete(this.local_assets, asset_id );
 
-            if (asset_details && asset_details.asset_path) {
-                window.ipcRenderer.sendSync('delete_file',  asset_details.asset_path );
+            if (asset_details && (asset_details.asset_path || asset_details.asset_path_raw)) {
+                window.ipcRenderer.sendSync('delete_file', asset_details.asset_path || asset_details.asset_path_raw);
             }
         },
 
@@ -378,6 +383,22 @@ export default {
             let hf_token = "";
             if (this.app && this.app.app_state && this.app.app_state.app_data && this.app.app_state.app_data.settings) {
                 hf_token = this.app.app_state.app_data.settings.hf_token || "";
+            }
+
+            if (asset_details.url && asset_details.url.includes("huggingface.co")) {
+                
+                console.log("[HF Download] Sending dndl for asset:", asset_id, "url:", asset_details.url, "dest:", dest_path);
+                this.app.app_state.global_loader_modal_msg = "Downloading " + asset_details.title + "... This may take a while.";
+                this.app.app_state.global_loader_percentage = 0;
+                
+                send_to_py("dndl " + JSON.stringify({
+                    model_url: asset_details.url,
+                    dest_path: dest_path,
+                    asset_id: asset_id,
+                    hf_token: hf_token
+                }));
+                console.log("[HF Download] dndl command sent for:", asset_id);
+                return;
             }
 
             download_file( asset_details.url , dest_path , asset_hash  , on_progress , on_success ,  on_error , hf_token )

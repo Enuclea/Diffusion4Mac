@@ -157,39 +157,48 @@ const LoraStore = {
             schnell_loras: [
                 {
                     id: "flux_schnell_detailed",
-                    title: "Detailed Enhancer (Schnell)",
+                    title: "Detailed Enhancer",
                     description: "Brings out intricate textures, microscopic details, and hyper-realistic surfaces.",
                     md5: "flux_schnell_detailed_dummy",
                     filename: "flux_schnell_detailed.safetensors",
-                    url: "https://huggingface.co/enuclea/Diffusion4Mac-LoRAs/resolve/main/flux_schnell_detailed.safetensors",
+                    url: "https://huggingface.co/Shakker-Labs/FLUX.1-dev-LoRA-add-details/resolve/main/FLUX-dev-lora-add_details.safetensors",
                     img_url: require("../assets/imgs/page_icon_imgs/lora_detailed.png"),
-                    keyword: "detailed",
+                    keyword: "",
+                    min_weight: 0.0,
+                    max_weight: 1.5,
+                    default_weight: 0.8,
                     model_meta_data: {
                         type: "lora"
                     }
                 },
                 {
                     id: "flux_schnell_cinematic",
-                    title: "Cinematic Lighting (Schnell)",
-                    description: "Adds dramatic volume rays, natural light leak glows, and stylized cinematic colors.",
+                    title: "Cinematic Film",
+                    description: "Adds film grain, reversal film photography tones, and vintage cinematic color grading.",
                     md5: "flux_schnell_cinematic_dummy",
                     filename: "flux_schnell_cinematic.safetensors",
-                    url: "https://huggingface.co/enuclea/Diffusion4Mac-LoRAs/resolve/main/flux_schnell_cinematic.safetensors",
+                    url: "https://huggingface.co/Shakker-Labs/FilmPortrait/resolve/main/filmfotos.safetensors",
                     img_url: require("../assets/imgs/page_icon_imgs/lora_cinematic.png"),
-                    keyword: "cinematic",
+                    keyword: "filmfotos, film grain",
+                    min_weight: 0.0,
+                    max_weight: 1.5,
+                    default_weight: 0.8,
                     model_meta_data: {
                         type: "lora"
                     }
                 },
                 {
                     id: "flux_schnell_portrait",
-                    title: "Portrait Engine (Schnell)",
+                    title: "Portrait Engine",
                     description: "Enhances facial structures, eyes, hair fidelity, and realistic skin tone textures.",
                     md5: "flux_schnell_portrait_dummy",
                     filename: "flux_schnell_portrait.safetensors",
-                    url: "https://huggingface.co/enuclea/Diffusion4Mac-LoRAs/resolve/main/flux_schnell_portrait.safetensors",
+                    url: "https://huggingface.co/strangerzonehf/Flux-Super-Portrait-LoRA/resolve/main/Super-Portrait.safetensors",
                     img_url: require("../assets/imgs/page_icon_imgs/lora_portrait.png"),
-                    keyword: "portrait",
+                    keyword: "Super Portrait",
+                    min_weight: 0.0,
+                    max_weight: 1.5,
+                    default_weight: 0.8,
                     model_meta_data: {
                         type: "lora"
                     }
@@ -198,39 +207,48 @@ const LoraStore = {
             klein_loras: [
                 {
                     id: "flux_klein_detailed",
-                    title: "Detailed Enhancer (Klein)",
-                    description: "Brings out intricate textures, microscopic details, and hyper-realistic surfaces on Flux 2.",
+                    title: "Detailed Enhancer",
+                    description: "Enhances skin texture, fabric weave, and micro-detail sharpness for photorealism on Flux 2.",
                     md5: "flux_klein_detailed_dummy",
                     filename: "flux_klein_detailed.safetensors",
-                    url: "https://huggingface.co/enuclea/Diffusion4Mac-LoRAs/resolve/main/flux_klein_detailed.safetensors",
+                    url: "https://huggingface.co/dx8152/Flux2-Klein-9B-Enhanced-Details/resolve/main/realistic.safetensors",
                     img_url: require("../assets/imgs/page_icon_imgs/lora_detailed.png"),
-                    keyword: "detailed",
+                    keyword: "",
+                    min_weight: 0.0,
+                    max_weight: 1.0,
+                    default_weight: 0.65,
                     model_meta_data: {
                         type: "lora"
                     }
                 },
                 {
                     id: "flux_klein_cinematic",
-                    title: "Cinematic Lighting (Klein)",
+                    title: "Cinematic Film",
                     description: "Adds dramatic volume rays, natural light leak glows, and stylized cinematic colors on Flux 2.",
                     md5: "flux_klein_cinematic_dummy",
                     filename: "flux_klein_cinematic.safetensors",
-                    url: "https://huggingface.co/enuclea/Diffusion4Mac-LoRAs/resolve/main/flux_klein_cinematic.safetensors",
+                    url: "https://huggingface.co/artificialguybr/CINEMATIC-FILMSTILL-REDMOND-FLUXKLEIN9B/resolve/main/%5BFLUX.2.Klein%5DFilmStill_Redmond.safetensors",
                     img_url: require("../assets/imgs/page_icon_imgs/lora_cinematic.png"),
-                    keyword: "cinematic",
+                    keyword: "Cinematic, Film Still",
+                    min_weight: 0.0,
+                    max_weight: 1.5,
+                    default_weight: 0.8,
                     model_meta_data: {
                         type: "lora"
                     }
                 },
                 {
                     id: "flux_klein_portrait",
-                    title: "Portrait Engine (Klein)",
-                    description: "Enhances facial structures, eyes, hair fidelity, and realistic skin tone textures on Flux 2.",
+                    title: "Portrait Engine",
+                    description: "Studio-quality relighting and facial enhancement while preserving identity on Flux 2.",
                     md5: "flux_klein_portrait_dummy",
                     filename: "flux_klein_portrait.safetensors",
-                    url: "https://huggingface.co/enuclea/Diffusion4Mac-LoRAs/resolve/main/flux_klein_portrait.safetensors",
+                    url: "https://huggingface.co/linoyts/Flux2-Klein-Delight-LoRA/resolve/main/pytorch_lora_weights.safetensors",
                     img_url: require("../assets/imgs/page_icon_imgs/lora_portrait.png"),
-                    keyword: "portrait",
+                    keyword: "",
+                    min_weight: 0.0,
+                    max_weight: 1.0,
+                    default_weight: 0.7,
                     model_meta_data: {
                         type: "lora"
                     }
@@ -298,6 +316,14 @@ const LoraStore = {
                     }
                 }
                 Vue.set(lora_settings, lora_id, true);
+                
+                // Set default weight if not already set
+                let strengths = this.app.app_state.app_data.settings.lora_strengths;
+                if (strengths && strengths[lora_id] === undefined) {
+                    let lora_def = this.find_lora_def(lora_id);
+                    let default_w = (lora_def && lora_def.default_weight !== undefined) ? lora_def.default_weight : 1.0;
+                    Vue.set(strengths, lora_id, default_w);
+                }
             } else {
                 Vue.set(lora_settings, lora_id, false);
             }
@@ -308,10 +334,19 @@ const LoraStore = {
                 this.import_form.asset_path = file_path;
             }
         },
+        find_lora_def(lora_id) {
+            let all = [...this.schnell_loras, ...this.klein_loras];
+            return all.find(l => l.id === lora_id) || null;
+        },
         get_strength(lora_id) {
-            if (!this.app.is_mounted || !this.app.app_state.app_data.settings.lora_strengths) return 1.0;
+            if (!this.app.is_mounted || !this.app.app_state.app_data.settings.lora_strengths) {
+                let lora_def = this.find_lora_def(lora_id);
+                return (lora_def && lora_def.default_weight !== undefined) ? lora_def.default_weight : 1.0;
+            }
             const str = this.app.app_state.app_data.settings.lora_strengths[lora_id];
-            return str !== undefined ? str : 1.0;
+            if (str !== undefined) return str;
+            let lora_def = this.find_lora_def(lora_id);
+            return (lora_def && lora_def.default_weight !== undefined) ? lora_def.default_weight : 1.0;
         },
         update_strength(lora_id, value) {
             if (this.app.is_mounted && this.app.app_state.app_data.settings.lora_strengths) {

@@ -45,7 +45,7 @@ function start_bridge() {
         python = require('child_process').spawn( bin_path );
     }
     else if (fs.existsSync(script_path)) {
-        python = require('child_process').spawn('python', [script_path]);
+        python = require('child_process').spawn('python', ['-u', script_path]);
     }
     else{
         const path = require('path');

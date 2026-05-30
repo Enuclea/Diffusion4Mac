@@ -123,14 +123,14 @@ export default {
                 let target_family = model_sel === "Flux Schnell" ? "flux_schnell" : "flux_klein";
                 let stacking = !!this.app.app_state.app_data.settings.lora_stacking;
                 
-                // Define default loras lookup
+                // Define default loras lookup with Hugging Face URLs
                 let default_loras = [
-                    { id: 'flux_schnell_detailed', family: 'flux_schnell', keyword: 'detailed' },
-                    { id: 'flux_schnell_cinematic', family: 'flux_schnell', keyword: 'cinematic' },
-                    { id: 'flux_schnell_portrait', family: 'flux_schnell', keyword: 'portrait' },
-                    { id: 'flux_klein_detailed', family: 'flux_klein', keyword: 'detailed' },
-                    { id: 'flux_klein_cinematic', family: 'flux_klein', keyword: 'cinematic' },
-                    { id: 'flux_klein_portrait', family: 'flux_klein', keyword: 'portrait' }
+                    { id: 'flux_schnell_detailed', family: 'flux_schnell', keyword: '', url: 'https://huggingface.co/Shakker-Labs/FLUX.1-dev-LoRA-add-details/resolve/main/FLUX-dev-lora-add_details.safetensors' },
+                    { id: 'flux_schnell_cinematic', family: 'flux_schnell', keyword: 'filmfotos, film grain', url: 'https://huggingface.co/Shakker-Labs/FilmPortrait/resolve/main/filmfotos.safetensors' },
+                    { id: 'flux_schnell_portrait', family: 'flux_schnell', keyword: 'Super Portrait', url: 'https://huggingface.co/strangerzonehf/Flux-Super-Portrait-LoRA/resolve/main/Super-Portrait.safetensors' },
+                    { id: 'flux_klein_detailed', family: 'flux_klein', keyword: '', url: 'https://huggingface.co/dx8152/Flux2-Klein-9B-Enhanced-Details/resolve/main/realistic.safetensors' },
+                    { id: 'flux_klein_cinematic', family: 'flux_klein', keyword: 'Cinematic, Film Still', url: 'https://huggingface.co/artificialguybr/CINEMATIC-FILMSTILL-REDMOND-FLUXKLEIN9B/resolve/main/%5BFLUX.2.Klein%5DFilmStill_Redmond.safetensors' },
+                    { id: 'flux_klein_portrait', family: 'flux_klein', keyword: '', url: 'https://huggingface.co/linoyts/Flux2-Klein-Delight-LoRA/resolve/main/pytorch_lora_weights.safetensors' }
                 ];
                 
                 // Combine default + custom loras
@@ -145,6 +145,9 @@ export default {
                             let asset = this.app.assets_manager.get_downloaded_asset(lora.id);
                             if (asset && asset.status === 'done') {
                                 path = asset.asset_path;
+                            } else if (lora.url) {
+                                // Fallback: Pass the HF URL so python resolves/downloads it using hf_hub_download
+                                path = lora.url;
                             }
                         }
                         

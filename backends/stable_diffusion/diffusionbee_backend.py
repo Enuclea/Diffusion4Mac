@@ -79,6 +79,84 @@ def resize_image_aspect(img, max_dim=1024):
     resample_filter = getattr(Image, "Resampling", Image).LANCZOS
     return img.resize((new_w, new_h), resample_filter)
 
+def resolve_hf_url(url, token=None):
+    if not url:
+        return None
+    if not isinstance(url, str):
+        return url
+    if not (url.startswith("http://") or url.startswith("https://")) or "huggingface.co" not in url:
+        return url
+    
+    try:
+        import urllib.parse
+        from huggingface_hub import hf_hub_download
+        
+        parsed = urllib.parse.urlparse(url)
+        # path parts: split by '/'
+        path_decoded = urllib.parse.unquote(parsed.path)
+        parts = [p for p in path_decoded.split('/') if p]
+        
+        # Hugging Face URL structure:
+        # Model: https://huggingface.co/owner/repo/resolve/branch/filename
+        # Dataset: https://huggingface.co/datasets/owner/repo/resolve/branch/filename
+        # Space: https://huggingface.co/spaces/owner/repo/resolve/branch/filename
+        
+        repo_type = "model"
+        if parts and parts[0] == "datasets":
+            repo_type = "dataset"
+            parts = parts[1:]
+        elif parts and parts[0] == "spaces":
+            repo_type = "space"
+            parts = parts[1:]
+            
+        if len(parts) >= 5 and parts[2] == "resolve":
+            repo_id = f"{parts[0]}/{parts[1]}"
+            revision = parts[3]
+            filename = "/".join(parts[4:])
+            
+            print(f"sdbk mltl Downloading asset:{filename}")
+            sys.stdout.flush()
+            
+            import huggingface_hub.utils
+            orig_init = huggingface_hub.utils.tqdm.__init__
+            orig_update = huggingface_hub.utils.tqdm.update
+
+            def custom_init(self, *args, **kwargs):
+                kwargs['disable'] = False
+                orig_init(self, *args, **kwargs)
+                self._last_printed = -1
+
+            def custom_update(self, n=1):
+                orig_update(self, n)
+                if self.total:
+                    percent = int((self.n / self.total) * 100)
+                    if percent > getattr(self, '_last_printed', -1):
+                        self._last_printed = percent
+                        print(f"sdbk mlpr {percent}")
+                        sys.stdout.flush()
+
+            huggingface_hub.utils.tqdm.__init__ = custom_init
+            huggingface_hub.utils.tqdm.update = custom_update
+            
+            try:
+                local_path = hf_hub_download(
+                    repo_id=repo_id,
+                    filename=filename,
+                    revision=revision,
+                    repo_type=repo_type,
+                    token=token
+                )
+            finally:
+                huggingface_hub.utils.tqdm.__init__ = orig_init
+                huggingface_hub.utils.tqdm.update = orig_update
+                
+            print(f"sdbk resolved: Downloaded successfully to {local_path}")
+            sys.stdout.flush()
+            return local_path
+    except Exception as e:
+        print(f"Error resolving HF URL {url} via hf_hub_download: {e}")
+    return url
+
 def main():
     print("sdbk mdld") # notify UI model logic is ready to load/run
 
@@ -103,7 +181,6 @@ def main():
             try:
                 json_str = inp_str.replace("b2py dndl", "").strip()
                 data = json.loads(json_str)
-                model_name = data.get("model", "black-forest-labs/FLUX.2-klein-9B")
                 token = data.get("hf_token", None)
                 if token == "":
                     token = None
@@ -113,32 +190,108 @@ def main():
                     os.environ["HF_TOKEN"] = token
                     os.environ["HUGGING_FACE_HUB_TOKEN"] = token
 
-                print("sdbk mltl Downloading " + model_name)
-                sys.stdout.flush()
+                model_url = data.get("model_url", None)
+                if model_url:
+                    dest_path = data.get("dest_path")
+                    asset_id = data.get("asset_id", "lora")
+                    
+                    # Parse Hugging Face URL
+                    import urllib.parse
+                    from huggingface_hub import hf_hub_download
+                    from tqdm.auto import tqdm
+                    import shutil
+                    
+                    parsed = urllib.parse.urlparse(model_url)
+                    path_decoded = urllib.parse.unquote(parsed.path)
+                    parts = [p for p in path_decoded.split('/') if p]
+                    
+                    repo_type = "model"
+                    if parts and parts[0] == "datasets":
+                        repo_type = "dataset"
+                        parts = parts[1:]
+                    elif parts and parts[0] == "spaces":
+                        repo_type = "space"
+                        parts = parts[1:]
+                        
+                    if len(parts) >= 5 and parts[2] == "resolve":
+                        repo_id = f"{parts[0]}/{parts[1]}"
+                        revision = parts[3]
+                        filename = "/".join(parts[4:])
+                        
+                        print(f"sdbk mltl Downloading asset:{asset_id}")
+                        sys.stdout.flush()
+                        
+                        import huggingface_hub.utils
+                        orig_init = huggingface_hub.utils.tqdm.__init__
+                        orig_update = huggingface_hub.utils.tqdm.update
 
-                from huggingface_hub import snapshot_download
-                from tqdm.auto import tqdm
+                        def custom_init(self, *args, **kwargs):
+                            kwargs['disable'] = False
+                            orig_init(self, *args, **kwargs)
+                            self._last_printed = -1
 
-                class HuggingFaceDownloadProgress(tqdm):
-                    def __init__(self, *args, **kwargs):
-                        super().__init__(*args, **kwargs)
-                        self._last_printed = -1
-                    def update(self, n=1):
-                        super().update(n)
-                        if self.total:
-                            percent = int((self.n / self.total) * 100)
-                            if percent > self._last_printed:
-                                self._last_printed = percent
-                                print(f"sdbk mlpr {percent}")
-                                sys.stdout.flush()
+                        def custom_update(self, n=1):
+                            orig_update(self, n)
+                            if self.total:
+                                percent = int((self.n / self.total) * 100)
+                                if percent > getattr(self, '_last_printed', -1):
+                                    self._last_printed = percent
+                                    print(f"sdbk mlpr {percent}")
+                                    sys.stdout.flush()
 
-                snapshot_download(
-                    repo_id=model_name,
-                    token=token,
-                    tqdm_class=HuggingFaceDownloadProgress
-                )
-                print("sdbk mdld")
-                sys.stdout.flush()
+                        huggingface_hub.utils.tqdm.__init__ = custom_init
+                        huggingface_hub.utils.tqdm.update = custom_update
+                        
+                        try:
+                            local_path = hf_hub_download(
+                                repo_id=repo_id,
+                                filename=filename,
+                                revision=revision,
+                                repo_type=repo_type,
+                                token=token
+                            )
+                        finally:
+                            huggingface_hub.utils.tqdm.__init__ = orig_init
+                            huggingface_hub.utils.tqdm.update = orig_update
+                        
+                        # Copy the file to dest_path
+                        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                        shutil.copy(local_path, dest_path)
+                        # Always report 100% before completion (handles cached files with no tqdm callbacks)
+                        print("sdbk mlpr 100")
+                        sys.stdout.flush()
+                        print("sdbk mdld")
+                        sys.stdout.flush()
+                    else:
+                        raise ValueError(f"Invalid Hugging Face URL format: {model_url}")
+                else:
+                    model_name = data.get("model", "black-forest-labs/FLUX.2-klein-9B")
+                    print("sdbk mltl Downloading " + model_name)
+                    sys.stdout.flush()
+
+                    from huggingface_hub import snapshot_download
+                    from tqdm.auto import tqdm
+
+                    class HuggingFaceDownloadProgress(tqdm):
+                        def __init__(self, *args, **kwargs):
+                            super().__init__(*args, **kwargs)
+                            self._last_printed = -1
+                        def update(self, n=1):
+                            super().update(n)
+                            if self.total:
+                                percent = int((self.n / self.total) * 100)
+                                if percent > self._last_printed:
+                                    self._last_printed = percent
+                                    print(f"sdbk mlpr {percent}")
+                                    sys.stdout.flush()
+
+                    snapshot_download(
+                        repo_id=model_name,
+                        token=token,
+                        tqdm_class=HuggingFaceDownloadProgress
+                    )
+                    print("sdbk mdld")
+                    sys.stdout.flush()
             except Exception as e:
                 print(f"sdbk errr {str(e)}")
                 sys.stdout.flush()
@@ -197,8 +350,30 @@ def main():
                     lora_weights = [1.0] * len(lora_paths)
 
             # Get target image dimensions to resize guide/reference images accordingly
-            target_width = data.get("img_width", 1024)
-            target_height = data.get("img_height", 1024)
+            try:
+                target_width = int(data.get("img_width", 1024) or 1024)
+            except Exception:
+                target_width = 1024
+            try:
+                target_height = int(data.get("img_height", 1024) or 1024)
+            except Exception:
+                target_height = 1024
+            
+            # Cap target dimensions to a maximum of 1024 to prevent RAM runaway
+            MAX_DIMENSION = 1024
+            if target_width > MAX_DIMENSION or target_height > MAX_DIMENSION:
+                if target_width > target_height:
+                    target_height = int(target_height * (MAX_DIMENSION / target_width))
+                    target_width = MAX_DIMENSION
+                else:
+                    target_width = int(target_width * (MAX_DIMENSION / target_height))
+                    target_height = MAX_DIMENSION
+            
+            target_width = max(16, (target_width // 16) * 16)
+            target_height = max(16, (target_height // 16) * 16)
+            
+            data["img_width"] = target_width
+            data["img_height"] = target_height
             max_dim = max(target_width, target_height)
 
             # Load all available guide images and downsize them to target size
@@ -284,8 +459,21 @@ def main():
                 loaded_adapters = []
                 loaded_weights = []
                 for idx, path in enumerate(paths):
-                    if not path or not os.path.exists(path):
+                    if not path:
                         continue
+                    
+                    # Resolve Hugging Face URL if path is a URL
+                    if path.startswith("http://") or path.startswith("https://"):
+                        resolved_path = resolve_hf_url(path, token=hf_token)
+                        if resolved_path and os.path.exists(resolved_path):
+                            path = resolved_path
+                        else:
+                            print(f"Skipping LoRA URL {path} as it could not be resolved/downloaded.")
+                            continue
+
+                    if not os.path.exists(path):
+                        continue
+                        
                     adapter_name = f"lora_{idx}"
                     try:
                         print(f"Loading LoRA {idx}: {path}")
@@ -303,7 +491,7 @@ def main():
                         is_corrupt = "checkpoint" in str(e) or "safetensors" in str(e) or "invalid" in str(e).lower()
                         if is_corrupt:
                             try:
-                                if os.path.exists(path):
+                                if os.path.exists(path) and os.path.getsize(path) < 1024 * 1024:
                                     print(f"Removing corrupt LoRA file: {path}")
                                     os.remove(path)
                             except Exception as de:
@@ -316,7 +504,7 @@ def main():
                                 print(f"Fallback loading failed: {e2}")
                                 if "checkpoint" in str(e2) or "safetensors" in str(e2) or "invalid" in str(e2).lower():
                                     try:
-                                        if os.path.exists(path):
+                                        if os.path.exists(path) and os.path.getsize(path) < 1024 * 1024:
                                             print(f"Removing corrupt LoRA file: {path}")
                                             os.remove(path)
                                     except Exception as de:

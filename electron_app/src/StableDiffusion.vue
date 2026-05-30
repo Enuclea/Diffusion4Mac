@@ -34,6 +34,7 @@ export default {
             is_backend_loaded : false,
             is_model_downloading: false, 
             downloading_model_id: null,
+            downloading_asset_ids: null,
             is_input_avail : false,
             model_loading_msg : "",
             model_loading_title : "",
@@ -51,6 +52,7 @@ export default {
         state_msg(msg){
             let msg_code = msg.substring(0, 4);
             if(msg_code == "mdld"){
+                console.log("[SD] mdld received. downloading_asset_ids:", this.downloading_asset_ids, "downloading_model_id:", this.downloading_model_id);
                 this.is_backend_loaded = true;
                 this.is_model_downloading = false;
                 this.loading_percentage = -1;
@@ -59,39 +61,40 @@ export default {
                 }
                 
                 let completed_model_id = this.downloading_model_id;
-                if (!completed_model_id && this.$parent.assets_manager) {
+                let completed_asset_ids = this.downloading_asset_ids || (completed_model_id ? [completed_model_id] : []);
+                if (completed_asset_ids.length === 0 && this.$parent.assets_manager) {
                     if (this.$parent.assets_manager.downloading['flux_klein'] && this.$parent.assets_manager.downloading['flux_klein'].status === 'downloading') {
-                        completed_model_id = 'flux_klein';
+                        completed_asset_ids = ['flux_klein'];
                     } else if (this.$parent.assets_manager.downloading['flux_schnell'] && this.$parent.assets_manager.downloading['flux_schnell'].status === 'downloading') {
-                        completed_model_id = 'flux_schnell';
+                        completed_asset_ids = ['flux_schnell'];
                     }
                 }
                 
-                if (completed_model_id && this.$parent.assets_manager) {
-                    if (!this.$parent.assets_manager.downloading[completed_model_id]) {
-                        Vue.set(this.$parent.assets_manager.downloading, completed_model_id, {
-                            id: completed_model_id,
-                            status: 'done',
-                            progress: 100
-                        });
-                    } else {
-                        Vue.set(this.$parent.assets_manager.downloading[completed_model_id], 'status', 'done');
-                        Vue.set(this.$parent.assets_manager.downloading[completed_model_id], 'progress', 100);
+                if (this.$parent.assets_manager) {
+                    let is_base = false;
+                    for (let tid of completed_asset_ids) {
+                        if (tid === 'flux_klein' || tid === 'flux_schnell') {
+                            is_base = true;
+                            Vue.set(this.$parent.assets_manager.downloading[tid], 'status', 'done');
+                            Vue.set(this.$parent.assets_manager.downloading[tid], 'progress', 100);
+                        }
                     }
-                    
-                    let title = completed_model_id === 'flux_klein' ? 'FLUX.2 [klein]' : 'FLUX.1-schnell';
-                    let asset_path = completed_model_id === 'flux_klein' ? 'black-forest-labs/FLUX.2-klein-9B' : 'black-forest-labs/FLUX.1-schnell';
-                    
-                    Vue.set(this.$parent.assets_manager.downloaded_assets, completed_model_id, {
-                        id: completed_model_id,
-                        title: title,
-                        status: 'done',
-                        is_locally_imported: true,
-                        asset_path: asset_path
-                    });
+                    if (!is_base) {
+                        for (let tid of completed_asset_ids) {
+                            let asset_details = this.$parent.assets_manager.downloading[tid] || {};
+                            asset_details.status = 'done';
+                            asset_details.progress = 100;
+                            // Ensure asset_path is set from asset_path_raw for HF downloads
+                            if (!asset_details.asset_path && asset_details.asset_path_raw) {
+                                asset_details.asset_path = asset_details.asset_path_raw;
+                            }
+                            Vue.set(this.$parent.assets_manager.downloaded_assets, tid, asset_details);
+                        }
+                    }
                 }
                 
                 this.downloading_model_id = null;
+                this.downloading_asset_ids = null;
                 this.$parent.app_state.global_loader_modal_msg = "";
             }
             if(msg_code == "mldn"){
@@ -101,6 +104,7 @@ export default {
                     this.$parent.app_state.global_loader_percentage = -1;
                 }
                 this.downloading_model_id = null;
+                this.downloading_asset_ids = null;
             }
             if(msg_code == "inrd"){
                 console.log("cps unset inrd ")
@@ -131,11 +135,18 @@ export default {
 
             if(msg_code == "mlpr"){
                 let p = Number(msg.substring(5).trim());
+                console.log("[SD] mlpr received:", p, "downloading_asset_ids:", this.downloading_asset_ids);
                 this.loading_percentage = p;
                 if (this.$parent.app_state) {
                     this.$parent.app_state.global_loader_percentage = p;
                 }
                 if (this.$parent.assets_manager) {
+                    let tids = this.downloading_asset_ids || (this.downloading_model_id ? [this.downloading_model_id] : []);
+                    for (let tid of tids) {
+                        if (this.$parent.assets_manager.downloading[tid]) {
+                            Vue.set(this.$parent.assets_manager.downloading[tid], 'progress', p);
+                        }
+                    }
                     if (this.$parent.assets_manager.downloading['flux_klein']) {
                         Vue.set(this.$parent.assets_manager.downloading['flux_klein'], 'progress', p);
                     }
@@ -156,7 +167,59 @@ export default {
             if(msg_code == "mltl"){
                 let p = (msg.substring(5).trim());
 
-                if( p.includes("Downloading") ){
+                if( p.startsWith("Downloading asset:") ){
+                    this.is_model_downloading = true;
+                    let asset_id = p.replace("Downloading asset:", "").trim();
+                    console.log("[SD] mltl Downloading asset received, asset_id:", asset_id);
+                    
+                    // Map filename or asset ID to default stock LoRA IDs case-insensitively
+                    let target_ids = [];
+                    let asset_id_lower = asset_id.toLowerCase();
+                    if (asset_id_lower === "flux_schnell_detailed" || asset_id_lower === "flux_klein_detailed") {
+                        target_ids = [asset_id_lower];
+                    } else if (asset_id_lower.includes("flux-dev-lora-add_details")) {
+                        target_ids = ["flux_schnell_detailed"];
+                    } else if (asset_id_lower.includes("realistic") && asset_id_lower.includes("klein")) {
+                        target_ids = ["flux_klein_detailed"];
+                    } else if (asset_id_lower === "flux_schnell_cinematic" || asset_id_lower === "flux_klein_cinematic") {
+                        target_ids = [asset_id_lower];
+                    } else if (asset_id_lower.includes("filmfotos") || asset_id_lower.includes("filmportrait")) {
+                        target_ids = ["flux_schnell_cinematic"];
+                    } else if (asset_id_lower.includes("filmstill_redmond") || asset_id_lower.includes("fluxklein")) {
+                        target_ids = ["flux_klein_cinematic"];
+                    } else if (asset_id_lower === "flux_schnell_portrait" || asset_id_lower === "flux_klein_portrait") {
+                        target_ids = [asset_id_lower];
+                    } else if (asset_id_lower.includes("super-portrait") || asset_id_lower.includes("super_portrait")) {
+                        target_ids = ["flux_schnell_portrait"];
+                    } else if (asset_id_lower.includes("delight") || asset_id_lower.includes("pytorch_lora_weights")) {
+                        target_ids = ["flux_klein_portrait"];
+                    } else if (asset_id_lower.includes("detailed")) {
+                        target_ids = [asset_id_lower];
+                    } else if (asset_id_lower.includes("cinematic")) {
+                        target_ids = [asset_id_lower];
+                    } else if (asset_id_lower.includes("portrait")) {
+                        target_ids = [asset_id_lower];
+                    } else {
+                        target_ids = [asset_id];
+                    }
+                    
+                    this.downloading_model_id = target_ids[0];
+                    this.downloading_asset_ids = target_ids;
+                    
+                    if (this.$parent.assets_manager) {
+                        for (let tid of target_ids) {
+                            let orig_asset = this.$parent.assets_manager.downloading[tid] || {};
+                            Vue.set(this.$parent.assets_manager.downloading, tid, {
+                                ...orig_asset,
+                                id: tid,
+                                status: 'downloading',
+                                progress: 0
+                            });
+                        }
+                    }
+                    this.$parent.app_state.global_loader_modal_msg = "Downloading asset... This may take a while.";
+                    this.$parent.app_state.global_loader_percentage = 0;
+                } else if( p.includes("Downloading") ){
                     this.is_model_downloading = true;
                     let model_id = null;
                     if (p.includes("FLUX.2-klein-9B") || p.includes("flux_klein")) {
@@ -166,6 +229,7 @@ export default {
                     }
                     if (model_id) {
                         this.downloading_model_id = model_id;
+                        this.downloading_asset_ids = [model_id];
                         if (this.$parent.assets_manager) {
                             if (!this.$parent.assets_manager.downloading[model_id]) {
                                 Vue.set(this.$parent.assets_manager.downloading, model_id, {
@@ -196,29 +260,34 @@ export default {
                 let error = msg.substring(5).trim()
                 
                 let failed_model_id = this.downloading_model_id;
-                if (!failed_model_id && this.$parent.assets_manager) {
-                    if (this.$parent.assets_manager.downloading['flux_klein'] && this.$parent.assets_manager.downloading['flux_klein'].status === 'downloading') {
-                        failed_model_id = 'flux_klein';
-                    } else if (this.$parent.assets_manager.downloading['flux_schnell'] && this.$parent.assets_manager.downloading['flux_schnell'].status === 'downloading') {
-                        failed_model_id = 'flux_schnell';
+                let failed_asset_ids = this.downloading_asset_ids || (failed_model_id ? [failed_model_id] : []);
+                if (failed_asset_ids.length === 0 && this.$parent.assets_manager) {
+                    // Check for any in-progress downloads (base models or LoRAs)
+                    for (let key in this.$parent.assets_manager.downloading) {
+                        if (this.$parent.assets_manager.downloading[key] && this.$parent.assets_manager.downloading[key].status === 'downloading') {
+                            failed_asset_ids.push(key);
+                        }
                     }
                 }
                 
-                if (failed_model_id && this.$parent.assets_manager) {
-                    if (!this.$parent.assets_manager.downloading[failed_model_id]) {
-                        Vue.set(this.$parent.assets_manager.downloading, failed_model_id, {
-                            id: failed_model_id,
-                            status: 'error',
-                            error: error.slice(-30),
-                            progress: 0
-                        });
-                    } else {
-                        Vue.set(this.$parent.assets_manager.downloading[failed_model_id], 'status', 'error');
-                        Vue.set(this.$parent.assets_manager.downloading[failed_model_id], 'error', error.slice(-30));
+                if (this.$parent.assets_manager) {
+                    for (let tid of failed_asset_ids) {
+                        if (!this.$parent.assets_manager.downloading[tid]) {
+                            Vue.set(this.$parent.assets_manager.downloading, tid, {
+                                id: tid,
+                                status: 'error',
+                                error: error.slice(-30),
+                                progress: 0
+                            });
+                        } else {
+                            Vue.set(this.$parent.assets_manager.downloading[tid], 'status', 'error');
+                            Vue.set(this.$parent.assets_manager.downloading[tid], 'error', error.slice(-30));
+                        }
                     }
                 }
                 
                 this.downloading_model_id = null;
+                this.downloading_asset_ids = null;
                 this.$parent.app_state.global_loader_modal_msg = "";
                 if(this.attached_cbs){
                     if(this.attached_cbs.on_err)

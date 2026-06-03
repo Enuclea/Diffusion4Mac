@@ -195,5 +195,9 @@ out.log
 err.log
 test_offload.py
 backends/stable_diffusion/test_mem.py
+backends/ollama/
+.wrangler/
+dist_backend/
+scratch/
 
 

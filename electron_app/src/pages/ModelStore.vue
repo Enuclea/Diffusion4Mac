@@ -81,8 +81,20 @@ const ModelStore ={
                     }
                 },
                 {
+                    id: "flux_klein_4b",
+                    title: "FLUX.2 [klein] (4B)",
+                    description: "Ultra-compact 4B-parameter model optimized for speed, text-to-image, and low-end hardware. Requires HF token.",
+                    md5: "flux_klein_4b_dummy",
+                    filename: "FLUX.2-klein-4B",
+                    img_url: require("../assets/imgs/page_icon_imgs/flux_klein.png"),
+                    model_meta_data: {
+                        sd_type: "Flux 2",
+                        float_type: "bf16"
+                    }
+                },
+                {
                     id: "flux_klein",
-                    title: "FLUX.2 [klein]",
+                    title: "FLUX.2 [klein] (9B)",
                     description: "Compact 9B-parameter model optimized for speed, text-to-image, and reference KV-editing. Requires HF token.",
                     md5: "flux_klein_dummy",
                     filename: "FLUX.2-klein-9B",
@@ -127,9 +139,13 @@ const ModelStore ={
                 return []
 
             let ret = []
-            for(let k in this.app.assets_manager.all_avail_assets){
-                if (k === 'flux_klein' || k === 'flux_schnell') {
-                    let asset = JSON.parse(JSON.stringify(this.app.assets_manager.all_avail_assets[k]))
+            let all_avail = {
+                ...(this.app.app_state.downloaded_assets || {}),
+                ...(this.app.assets_manager ? this.app.assets_manager.local_assets : {})
+            };
+            for(let k in all_avail){
+                if (k === 'flux_klein' || k === 'flux_klein_4b' || k === 'flux_schnell') {
+                    let asset = JSON.parse(JSON.stringify(all_avail[k]))
                     let static_details = this.models_list.find(x => x.id === k)
                     if (static_details) {
                         asset.img_url = static_details.img_url
@@ -155,7 +171,7 @@ const ModelStore ={
                 if (model.is_ollama_model) {
                     return !that.ollama_downloaded_models.includes(model.id);
                 }
-                return !(that.app.is_mounted && that.app.assets_manager.downloaded_assets[model.id]);
+                return !(that.app.is_mounted && that.app.app_state.downloaded_assets[model.id]);
             })
         }
     },

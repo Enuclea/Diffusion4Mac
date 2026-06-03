@@ -123,14 +123,37 @@ export default {
                 let target_family = model_sel === "Flux Schnell" ? "flux_schnell" : "flux_klein";
                 let stacking = !!this.app.app_state.app_data.settings.lora_stacking;
                 
+                let is_4b = this.app.app_state.app_data.settings.flux_klein_size === '4B';
+                
                 // Define default loras lookup with Hugging Face URLs
                 let default_loras = [
                     { id: 'flux_schnell_detailed', family: 'flux_schnell', keyword: '', url: 'https://huggingface.co/Shakker-Labs/FLUX.1-dev-LoRA-add-details/resolve/main/FLUX-dev-lora-add_details.safetensors' },
                     { id: 'flux_schnell_cinematic', family: 'flux_schnell', keyword: 'filmfotos, film grain', url: 'https://huggingface.co/Shakker-Labs/FilmPortrait/resolve/main/filmfotos.safetensors' },
                     { id: 'flux_schnell_portrait', family: 'flux_schnell', keyword: 'Super Portrait', url: 'https://huggingface.co/strangerzonehf/Flux-Super-Portrait-LoRA/resolve/main/Super-Portrait.safetensors' },
-                    { id: 'flux_klein_detailed', family: 'flux_klein', keyword: '', url: 'https://huggingface.co/dx8152/Flux2-Klein-9B-Enhanced-Details/resolve/main/realistic.safetensors' },
-                    { id: 'flux_klein_cinematic', family: 'flux_klein', keyword: 'Cinematic, Film Still', url: 'https://huggingface.co/artificialguybr/CINEMATIC-FILMSTILL-REDMOND-FLUXKLEIN9B/resolve/main/%5BFLUX.2.Klein%5DFilmStill_Redmond.safetensors' },
-                    { id: 'flux_klein_portrait', family: 'flux_klein', keyword: '', url: 'https://huggingface.co/linoyts/Flux2-Klein-Delight-LoRA/resolve/main/pytorch_lora_weights.safetensors' }
+                    { 
+                        id: is_4b ? 'flux_klein_detailed_4b' : 'flux_klein_detailed', 
+                        family: 'flux_klein', 
+                        keyword: '', 
+                        url: is_4b 
+                            ? 'https://huggingface.co/lrzjason/Consistance_Edit_Lora/resolve/main/f2k_4B_consist_20260314.safetensors'
+                            : 'https://huggingface.co/dx8152/Flux2-Klein-9B-Enhanced-Details/resolve/main/realistic.safetensors' 
+                    },
+                    { 
+                        id: is_4b ? 'flux_klein_cinematic_4b' : 'flux_klein_cinematic', 
+                        family: 'flux_klein', 
+                        keyword: 'Cinematic, Film Still', 
+                        url: is_4b 
+                            ? 'https://huggingface.co/lrzjason/Consistance_Edit_Lora/resolve/main/f2k_4B_consist_20260314.safetensors'
+                            : 'https://huggingface.co/artificialguybr/CINEMATIC-FILMSTILL-REDMOND-FLUXKLEIN9B/resolve/main/%5BFLUX.2.Klein%5DFilmStill_Redmond.safetensors' 
+                    },
+                    { 
+                        id: is_4b ? 'flux_klein_portrait_4b' : 'flux_klein_portrait', 
+                        family: 'flux_klein', 
+                        keyword: '', 
+                        url: is_4b 
+                            ? 'https://huggingface.co/lrzjason/Consistance_Edit_Lora/resolve/main/f2k_4B_consist_20260314.safetensors'
+                            : 'https://huggingface.co/linoyts/Flux2-Klein-Delight-LoRA/resolve/main/pytorch_lora_weights.safetensors' 
+                    }
                 ];
                 
                 // Combine default + custom loras
@@ -343,17 +366,33 @@ export default {
 
             let model_sel = this.sd_options.model_selection || "Flux Schnell";
             if (model_sel === "Flux Klein") {
-                ret.push({
-                    id: "flux_klein",
-                    title: "FLUX.2 [klein]",
-                    description: "Compact 9B-parameter model optimized for speed, text-to-image, and reference KV-editing. Requires HF token.",
-                    md5: "flux_klein_dummy",
-                    filename: "FLUX.2-klein-9B",
-                    model_meta_data: {
-                        sd_type: "Flux 2",
-                        float_type: "bf16"
-                    }
-                });
+                const settings = this.app?.app_state?.app_data?.settings || {};
+                const size = settings.flux_klein_size || "9B";
+                if (size === "4B") {
+                    ret.push({
+                        id: "flux_klein_4b",
+                        title: "FLUX.2 [klein] (4B)",
+                        description: "Ultra-compact 4B-parameter model optimized for speed, text-to-image, and low-end hardware. Requires HF token.",
+                        md5: "flux_klein_4b_dummy",
+                        filename: "FLUX.2-klein-4B",
+                        model_meta_data: {
+                            sd_type: "Flux 2",
+                            float_type: "bf16"
+                        }
+                    });
+                } else {
+                    ret.push({
+                        id: "flux_klein",
+                        title: "FLUX.2 [klein] (9B)",
+                        description: "Compact 9B-parameter model optimized for speed, text-to-image, and reference KV-editing. Requires HF token.",
+                        md5: "flux_klein_dummy",
+                        filename: "FLUX.2-klein-9B",
+                        model_meta_data: {
+                            sd_type: "Flux 2",
+                            float_type: "bf16"
+                        }
+                    });
+                }
             } else if (model_sel === "Flux Schnell") {
                 ret.push({
                     id: "flux_schnell",
@@ -376,7 +415,7 @@ export default {
            
             for(let asset of this.required_assets_modified){
                 let asset_id = asset.id
-                if(!(this.app.is_mounted && this.app.assets_manager.downloaded_assets[asset_id] && this.app.assets_manager.downloaded_assets[asset_id].status == 'done')){
+                if(!(this.app.is_mounted && this.app.app_state.downloaded_assets[asset_id] && this.app.app_state.downloaded_assets[asset_id].status == 'done')){
                     to_download.push(asset)
                 }
             }

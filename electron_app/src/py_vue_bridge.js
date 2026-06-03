@@ -46,8 +46,14 @@ function on_msg_from_py(msg) {
     }
     if (msg.substring(0, 4) == "sdbk") // update the state of 
     {
+        let inner = msg.substring(5);
+        if (inner.substring(0, 4) == "mlpr") {
+            console.log("[BRIDGE-DEBUG] mlpr message received in on_msg_from_py:", inner,
+                "app_component_object exists:", !!app_component_object,
+                "stable_diffusion exists:", !!(app_component_object && app_component_object.stable_diffusion));
+        }
         if(app_component_object)
-            app_component_object.stable_diffusion.state_msg(msg.substring(5))
+            app_component_object.stable_diffusion.state_msg(inner)
     } else if (msg.substring(0, 4) == "alrt") // just alert  
     {
         native_alert(msg.substring(5));

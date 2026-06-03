@@ -57,7 +57,7 @@ def process_opt(opts):
     for nn in range(opts['num_imgs']):
 
         
-        if  opts['seed'] < 20:
+        if  opts.get('seed', 0) < 20:
             print("sdbk errr just a random error lol")
             return
 
@@ -72,8 +72,10 @@ def process_opt(opts):
         time.sleep(0.8)
         impath = sample_path 
         im = cv2.imread(impath)
-        im = cv2.resize(im , ( opts['img_width'] , opts['img_height'] ) )
-        new_p =  "/tmp/%d_%d.png"%( opts['img_width'] , opts['img_height'])
+        img_width = opts.get('img_width', 1024) or 1024
+        img_height = opts.get('img_height', 1024) or 1024
+        im = cv2.resize(im , ( img_width , img_height ) )
+        new_p =  "/tmp/%d_%d.png"%( img_width , img_height)
         cv2.imwrite( new_p ,  im )
 
         # if 'input_image' in opts:
@@ -89,8 +91,6 @@ while True:
         print("got " , inp_str )
         if inp_str.strip() == "":
             continue
-        else:
-            print("sbdk errr The string is blank")
 
         if not "b2py t2im" in inp_str:
             continue
@@ -101,4 +101,4 @@ while True:
             print("sdbk inwk") # working on the input
             process_opt(d)
         except Exception as e:
-            print("sbdk errr %s"%(str(e))) 
+            print("sdbk errr %s"%(str(e))) 

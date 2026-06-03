@@ -27,12 +27,6 @@ image_manu_functions['send_img_2_img'] =  function (app, image_item_data){
 }
 image_manu_functions['send_img_2_img'].text = "Send to Img2Img"
 
-image_manu_functions['send_outpaint'] =  function (app, image_item_data){
-
-	app.functions.send_to_outpaint( image_item_data.image_url )
-	
-}
-image_manu_functions['send_outpaint'].text = "Send to AI Canvas"
 
 
 

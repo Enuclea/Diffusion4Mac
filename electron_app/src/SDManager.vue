@@ -85,7 +85,9 @@ export default {
             for(let i=0 ; i <gen_options.jobs.length ; i++ ){
                 imgs.push({})
             }
-            gallery_component.add_group({group_id: gen_options.group_id , num_imgs : gen_options.jobs.length, imgs: imgs , img_width:gen_options.jobs[0].img_width , img_height: gen_options.jobs[0].img_height})
+            let img_width = gen_options.jobs[0].img_width || 512;
+            let img_height = gen_options.jobs[0].img_height || 512;
+            gallery_component.add_group({group_id: gen_options.group_id , num_imgs : gen_options.jobs.length, imgs: imgs , img_width: img_width , img_height: img_height})
             gallery_component.scroll_to_top()
             if(this.stable_diffusion.is_input_avail){
                 this.get_and_do_job()
@@ -93,6 +95,11 @@ export default {
         },
 
         finish_current_job(){
+            if (this.queue.current_group == undefined) {
+                this.current_group_id = undefined;
+                this.current_job_index = undefined;
+                return;
+            }
             // if the whole group is finished
             let is_group_done = true;
 
@@ -152,7 +159,7 @@ export default {
                     let aug_img_path = img.aux_output_image_path
 
                     console.log("on img " + that.current_group_id + " " + that.current_job_index)
-                    if(that.current_group_id == undefined){
+                    if(that.current_group_id == undefined || that.queue.current_group == undefined){
                         console.log("whoops 1")
                         return;
                     }
@@ -180,7 +187,7 @@ export default {
                 },
                 on_progress(p ){
                     
-                    if(that.current_group_id == undefined)
+                    if(that.current_group_id == undefined || that.queue.current_group == undefined)
                         return;
 
                     if(that.current_job_index == undefined)
@@ -198,6 +205,9 @@ export default {
                 },
                 on_err(err){
                     console.log("errorrr ")
+                    if(that.current_group_id == undefined || that.queue.current_group == undefined || that.current_job_index == undefined){
+                        return;
+                    }
                     that.queue.current_group.jobs[that.current_job_index].generated_img = "ERROR" ;
                     that.queue.current_group.jobs[that.current_job_index].job_state = "done";
                     that.backend_error = err;
@@ -222,6 +232,7 @@ export default {
                 }
             }
             console.log("got in dex " + this.current_job_index )
+            job.job_state = "doing";
 
             this.stable_diffusion.text_to_img(job, callbacks, 'txt2img');
 
@@ -233,7 +244,7 @@ export default {
                 console.log("current_group not undefined ")
                 let job_todo = undefined;
                 for(let job of this.queue.current_group.jobs){
-                    if(job.job_state == "todo" || job.job_state == "doing"){
+                    if(job.job_state == "todo"){
                         job_todo = job
                         this.current_group_id = this.queue.current_group.group_id;
                         break
@@ -241,9 +252,16 @@ export default {
                 }
 
                 if(job_todo == undefined){
-                    console.log("job_todo undefined ")
+                    // Check if there are any jobs in this group still in progress
+                    let has_doing_jobs = this.queue.current_group.jobs.some(job => job.job_state === "doing");
+                    if (has_doing_jobs) {
+                        console.log("No todo jobs, but some jobs are still in progress. Waiting.")
+                        return;
+                    }
+                    console.log("job_todo undefined and all group jobs done")
                     // all jobs of that groups are done 
                     this.queue.current_group = undefined;
+                    this.current_group_id = undefined;
                     return this.get_and_do_job()
                 } else {
                     console.log("got a new job " + job_todo.job_id + " "  + job_todo.job_state + " " + job_todo.prompt )
@@ -290,8 +308,7 @@ export default {
                     this.get_and_do_job()
                     
                 }
-            },
-            deep: true
+            }
         } , 
     }
 }

@@ -7,12 +7,12 @@
         </div>
 
         <div v-else-if="is_downloading" class="l_button">
-             <b-progress :value="app.assets_manager.downloading[asset_details.id].progress" style="height: 10px; width:200px"></b-progress>
-             {{app.assets_manager.downloading[asset_details.id].progress || 0  }}%
+             <b-progress :value="app.app_state.downloading[asset_details.id].progress" style="height: 10px; width:200px"></b-progress>
+             {{app.app_state.downloading[asset_details.id].progress || 0  }}%
         </div>
 
         <div v-else-if="is_error"  >
-            <p style="color:red; margin-bottom:5px">  Error : {{app.assets_manager.downloading[asset_details.id].error}} </p>
+            <p style="color:red; margin-bottom:5px">  Error : {{app.app_state.downloading[asset_details.id].error}} </p>
             <div @click="downloadd" class="l_button button_colored">Download Again</div>
         </div>
 
@@ -48,9 +48,9 @@ export default {
             if(this.asset_details.is_locally_imported)
                 return true;
 
-            if(this.app.is_mounted && this.app.assets_manager.downloaded_assets[asset_id] && this.app.assets_manager.downloaded_assets[asset_id].status == 'done'){
+            if(this.app.is_mounted && this.app.app_state.downloaded_assets[asset_id] && this.app.app_state.downloaded_assets[asset_id].status == 'done'){
                 return true
-            } else if (this.app.is_mounted && this.app.assets_manager.downloading[asset_id] && this.app.assets_manager.downloading[asset_id].status == 'done') {
+            } else if (this.app.is_mounted && this.app.app_state.downloading[asset_id] && this.app.app_state.downloading[asset_id].status == 'done') {
                 return true
             } else {
                 return false
@@ -58,11 +58,11 @@ export default {
         } , 
         is_downloading(){
             let asset_id = this.asset_details.id
-            return (this.app.is_mounted && this.app.assets_manager.downloading[asset_id]&& this.app.assets_manager.downloading[asset_id].status == 'downloading')
+            return (this.app.is_mounted && this.app.app_state.downloading[asset_id]&& this.app.app_state.downloading[asset_id].status == 'downloading')
         } , 
         is_error(){
             let asset_id = this.asset_details.id
-            return (this.app.is_mounted && this.app.assets_manager.downloading[asset_id]&& this.app.assets_manager.downloading[asset_id].status == 'error')
+            return (this.app.is_mounted && this.app.app_state.downloading[asset_id]&& this.app.app_state.downloading[asset_id].status == 'error')
         }
     }
 }

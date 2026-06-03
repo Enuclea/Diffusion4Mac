@@ -23,8 +23,39 @@ if [ -d "$HOME/.pyenv" ]; then
     fi
 fi
 
+# Setup Python virtual environment
+if [ -d "venv" ] && [ "$(uname)" == "Darwin" ] && [ "$(uname -m)" == "arm64" ]; then
+    if file venv/bin/python3 | grep -q "x86_64"; then
+        echo "============================================="
+        echo "WARNING: Your virtual environment (venv) was built for Intel (x86_64)"
+        echo "but your Mac is Apple Silicon (arm64)."
+        echo "This causes PyTorch MPS acceleration to run extremely slowly under Rosetta 2."
+        echo "Recreating virtual environment natively..."
+        echo "============================================="
+        rm -rf venv
+    fi
+fi
+
+if [ ! -d "venv" ]; then
+    echo "Creating Python virtual environment (venv)..."
+    if [ "$(uname)" == "Darwin" ] && [ "$(uname -m)" == "arm64" ]; then
+        echo "Using system universal python3 to create native arm64 virtual environment..."
+        /usr/bin/python3 -m venv venv
+    else
+        python3 -m venv venv
+    fi
+    echo "Activating virtual environment..."
+    source venv/bin/activate
+    echo "Installing Python dependencies (requirements.txt)..."
+    pip install --upgrade pip
+    pip install -r backends/stable_diffusion/requirements.txt
+else
+    echo "Activating virtual environment..."
+    source venv/bin/activate
+fi
+
 # Print active python info for verification
-echo "Active Python: $(which python) ($(python --version 2>&1))"
+echo "Active Python: $(which python3) ($(python3 --version 2>&1))"
 
 # Check node & npm
 if ! command -v npm >/dev/null 2>&1; then
@@ -43,4 +74,5 @@ fi
 # Start the Electron development server
 echo "Launching Electron Dev Server..."
 cd electron_app
+export ELECTRON_ENABLE_LOGGING=1
 npm run electron:serve

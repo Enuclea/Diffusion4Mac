@@ -429,17 +429,74 @@ ipcMain.on('load_data', (event, fname) => {
 })
 
 
-ipcMain.on('delete_file', (event, fpath) => {
+ipcMain.on('delete_file', (event, fpath, asset_id) => {
     const fs = require('fs');
-    try{
-        fs.unlinkSync(fpath);
-        console.log("deleted")
+    const path = require('path');
+    const os = require('os');
+    const homedir = os.homedir();
+    
+    function deletePathRecursive(targetPath) {
+        if (!targetPath || targetPath === 'HuggingFace') return false;
+        try {
+            if (fs.existsSync(targetPath)) {
+                const stats = fs.statSync(targetPath);
+                if (stats.isDirectory()) {
+                    if (fs.rmSync) {
+                        fs.rmSync(targetPath, { recursive: true, force: true });
+                    } else {
+                        fs.rmdirSync(targetPath, { recursive: true });
+                    }
+                } else {
+                    fs.unlinkSync(targetPath);
+                }
+                console.log("[D4M] Deleted:", targetPath);
+                return true;
+            }
+        } catch (e) {
+            console.error("[D4M] Error deleting:", targetPath, e);
+        }
+        return false;
+    }
+
+    try {
+        // 1. Purge by asset_id (for base models and associated caches/temp files)
+        if (asset_id) {
+            if (asset_id === 'flux_schnell' || asset_id === 'flux_klein' || asset_id === 'flux_klein_4b') {
+                let hf_repo_folder = '';
+                if (asset_id === 'flux_schnell') {
+                    hf_repo_folder = 'models--black-forest-labs--FLUX.1-schnell';
+                } else if (asset_id === 'flux_klein') {
+                    hf_repo_folder = 'models--black-forest-labs--FLUX.2-klein-9B';
+                } else if (asset_id === 'flux_klein_4b') {
+                    hf_repo_folder = 'models--black-forest-labs--FLUX.2-klein-4B';
+                }
+                
+                // Hugging Face hub cache path
+                if (hf_repo_folder) {
+                    const hf_path = path.join(homedir, '.cache', 'huggingface', 'hub', hf_repo_folder);
+                    deletePathRecursive(hf_path);
+                }
+                
+                // Local CDN unzipped model folder
+                const local_model_dir = path.join(homedir, '.diffusionbee', 'downloaded_assets', 'models', asset_id);
+                deletePathRecursive(local_model_dir);
+                
+                // Leftover temporary download zip file
+                const temp_zip = path.join(homedir, '.diffusionbee', `temp_${asset_id}.zip`);
+                deletePathRecursive(temp_zip);
+            }
+        }
+        
+        // 2. Purge the specific fpath provided (LoRAs, custom models, or specific paths)
+        if (fpath && fpath !== 'HuggingFace') {
+            deletePathRecursive(fpath);
+        }
+        
         event.returnValue = true;
-    } catch {
-        console.log("err in deleting")
+    } catch (e) {
+        console.error("[D4M] Error in delete_file IPC route:", e);
         event.returnValue = false;
     }
-    
 })
 
 
@@ -503,11 +560,28 @@ function add_custom_pytorch_models(pytorch_model_path, model_name, convert_param
     
     let out_path =  path.join(homedir , ".diffusionbee" , "imported_models" , model_name+".tdict" );
     let proc;
+    let is_apple_silicon = false;
+    if (process.platform === 'darwin') {
+        try {
+            is_apple_silicon = require('child_process').execSync('sysctl -n hw.optional.arm64').toString().trim() === '1';
+        } catch (e) {
+            // ignore
+        }
+    }
+
     if (fs.existsSync(script_path)) {
-        proc = require('child_process').spawn( "python3"  , [ script_path ,  "convert_model" ,  pytorch_model_path , out_path ]);
+        if (is_apple_silicon) {
+            proc = require('child_process').spawn('arch', ['-arm64', 'python3', script_path, 'convert_model', pytorch_model_path, out_path]);
+        } else {
+            proc = require('child_process').spawn("python3", [script_path, "convert_model", pytorch_model_path, out_path]);
+        }
     } else {
-        let bin_path =  path.join(path.dirname(__dirname), 'core' , 'diffusionbee_backend' );
-        proc = require('child_process').spawn( bin_path  , [ "convert_model" ,  pytorch_model_path , out_path ]);
+        let bin_path =  path.join(path.dirname(__dirname), 'core', 'diffusionbee_backend');
+        if (is_apple_silicon) {
+            proc = require('child_process').spawn('arch', ['-arm64', bin_path, 'convert_model', pytorch_model_path, out_path]);
+        } else {
+            proc = require('child_process').spawn(bin_path, ["convert_model", pytorch_model_path, out_path]);
+        }
     }
     
 
@@ -690,6 +764,28 @@ ipcMain.on('check_file_valid', (event, fpath) => {
   } catch (e) {
     event.returnValue = false;
   }
+});
+ipcMain.on('check_path_exists', (event, fpath) => {
+  const fs = require('fs');
+  try {
+    event.returnValue = fs.existsSync(fpath);
+  } catch (e) {
+    event.returnValue = false;
+  }
+});
+
+
+ipcMain.on('get_system_info', (event) => {
+    try {
+        const os = require('os');
+        const cpus = os.cpus();
+        const cpu_model = cpus.length > 0 ? cpus[0].model : 'Unknown CPU';
+        const totalmem = os.totalmem();
+        const total_ram_gb = parseFloat((totalmem / (1024 * 1024 * 1024)).toFixed(1));
+        event.returnValue = { cpu_model, total_ram_gb };
+    } catch (e) {
+        event.returnValue = { cpu_model: 'Unknown CPU', total_ram_gb: 8.0 };
+    }
 });
 
 

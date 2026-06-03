@@ -53,7 +53,7 @@ export default {
                         let isValid = window.ipcRenderer.sendSync('check_file_valid', file_path);
                         if (!isValid) {
                             console.log("Removing invalid asset record and file: " + asset_id);
-                            window.ipcRenderer.sendSync('delete_file', file_path);
+                            window.ipcRenderer.sendSync('delete_file', file_path, asset_id);
                             Vue.delete(this.downloaded_assets, asset_id);
                             if (this.downloading && this.downloading[asset_id]) {
                                 Vue.delete(this.downloading, asset_id);
@@ -65,25 +65,15 @@ export default {
         }
     },
     data() {
-        let downloaded_assets_storage = window.ipcRenderer.sendSync('load_data' , 'downloaded_assets.json'); // get from local storage
         let local_assets_storage = window.ipcRenderer.sendSync('load_data' , 'locally_loaded_assets.json'); // get from local storage
 
         return {
-            downloaded_assets: downloaded_assets_storage ,
             local_assets: local_assets_storage , 
-            downloading: {} , // id , status : done/downloading/error/not_downloaded , progress , hash, 
             //TODO : ignore the certificate but see the signature
         };
     },
 
     watch:{
-         'downloaded_assets': {
-            handler: function(new_value) {
-                window.ipcRenderer.sendSync('save_data', new_value , 'downloaded_assets.json');
-            },
-            deep: true
-        } , 
-
          'local_assets': {
             handler: function(new_value) {
                 window.ipcRenderer.sendSync('save_data', new_value , 'locally_loaded_assets.json');
@@ -94,6 +84,12 @@ export default {
     },
 
     computed: {
+        downloaded_assets() {
+            return this.app.app_state.downloaded_assets;
+        },
+        downloading() {
+            return this.app.app_state.downloading;
+        },
         all_avail_assets(){
             return { // update the dict
               ...this.downloaded_assets ,
@@ -139,7 +135,11 @@ export default {
         }, 
 
         get_downloaded_asset_path(asset_id){
-            return (this.downloaded_assets[asset_id] || this.local_assets[asset_id] || {}).asset_path
+            let asset = this.downloaded_assets[asset_id] || this.local_assets[asset_id];
+            if (asset && asset.status === 'done') {
+                return asset.asset_path || 'HuggingFace';
+            }
+            return (asset || {}).asset_path;
         },
 
         get_downloaded_asset(asset_id){
@@ -177,8 +177,9 @@ export default {
             Vue.delete(this.downloading, asset_id );
             Vue.delete(this.local_assets, asset_id );
 
-            if (asset_details && (asset_details.asset_path || asset_details.asset_path_raw)) {
-                window.ipcRenderer.sendSync('delete_file', asset_details.asset_path || asset_details.asset_path_raw);
+            if (asset_details) {
+                let path_to_del = asset_details.asset_path || asset_details.asset_path_raw || null;
+                window.ipcRenderer.sendSync('delete_file', path_to_del, asset_id);
             }
         },
 
@@ -207,6 +208,7 @@ export default {
                     const decoder = new TextDecoder();
                     let buffer = "";
                     let reading = true;
+                    let streamError = null;
                     while (reading) {
                         const { done, value } = await reader.read();
                         if (done) {
@@ -223,7 +225,9 @@ export default {
                             try {
                                 const data = JSON.parse(line);
                                 if (data.error) {
-                                    throw new Error(data.error);
+                                    streamError = data.error;
+                                    reading = false;
+                                    break;
                                 }
                                 if (data.status === 'success') {
                                     Vue.set(that.downloading[asset_id], 'status', 'done');
@@ -239,6 +243,19 @@ export default {
                                 console.error("Error parsing Ollama stream chunk:", e);
                             }
                         }
+                    }
+                    
+                    if (streamError) {
+                        console.error("Ollama stream error:", streamError);
+                        Vue.set(that.downloading[asset_id], 'status', 'error');
+                        // Extract a user-friendly message
+                        let userMsg = streamError;
+                        if (streamError.includes("newer version")) {
+                            userMsg = "Please update Ollama: https://ollama.com/download";
+                        }
+                        Vue.set(that.downloading[asset_id], 'error', userMsg);
+                        alert("Ollama error: " + userMsg);
+                        return;
                     }
                     
                     // Final verification after stream closes
@@ -268,6 +285,32 @@ export default {
                 return;
             }
 
+            if (asset_id === 'flux_klein_4b') {
+                const token = this.app.app_state.app_data.settings.hf_token;
+                if (!token) {
+                    alert("Please enter your Hugging Face Token in Settings to download FLUX.2 [klein] (4B).");
+                    return;
+                }
+                
+                Vue.set(this.downloading, asset_id, {
+                    id: asset_id,
+                    status: 'downloading',
+                    progress: 0
+                });
+                
+                Vue.set(this.app.app_state, 'global_loader_modal_msg', "Downloading FLUX.2 [klein] (4B)... This may take a while.");
+                Vue.set(this.app.app_state, 'global_loader_percentage', 0);
+                
+                this.app.stable_diffusion.is_input_avail = false;
+                this.app.stable_diffusion.downloading_model_id = asset_id;
+                this.app.stable_diffusion.downloading_asset_ids = [asset_id];
+                send_to_py("dndl " + JSON.stringify({
+                    model: "black-forest-labs/FLUX.2-klein-4B",
+                    hf_token: token
+                }));
+                return;
+            }
+
             if (asset_id === 'flux_klein') {
                 const token = this.app.app_state.app_data.settings.hf_token;
                 if (!token) {
@@ -281,9 +324,12 @@ export default {
                     progress: 0
                 });
                 
-                this.app.app_state.global_loader_modal_msg = "Downloading FLUX.2 [klein]... This may take a while.";
-                this.app.app_state.global_loader_percentage = 0;
+                Vue.set(this.app.app_state, 'global_loader_modal_msg', "Downloading FLUX.2 [klein]... This may take a while.");
+                Vue.set(this.app.app_state, 'global_loader_percentage', 0);
                 
+                this.app.stable_diffusion.is_input_avail = false;
+                this.app.stable_diffusion.downloading_model_id = asset_id;
+                this.app.stable_diffusion.downloading_asset_ids = [asset_id];
                 send_to_py("dndl " + JSON.stringify({
                     model: "black-forest-labs/FLUX.2-klein-9B",
                     hf_token: token
@@ -298,9 +344,12 @@ export default {
                     progress: 0
                 });
                 
-                this.app.app_state.global_loader_modal_msg = "Downloading FLUX.1-schnell... This may take a while.";
-                this.app.app_state.global_loader_percentage = 0;
+                Vue.set(this.app.app_state, 'global_loader_modal_msg', "Downloading FLUX.1-schnell... This may take a while.");
+                Vue.set(this.app.app_state, 'global_loader_percentage', 0);
                 
+                this.app.stable_diffusion.is_input_avail = false;
+                this.app.stable_diffusion.downloading_model_id = asset_id;
+                this.app.stable_diffusion.downloading_asset_ids = [asset_id];
                 send_to_py("dndl " + JSON.stringify({
                     model: "black-forest-labs/FLUX.1-schnell",
                     hf_token: this.app.app_state.app_data.settings.hf_token || ""
@@ -388,9 +437,19 @@ export default {
             if (asset_details.url && asset_details.url.includes("huggingface.co")) {
                 
                 console.log("[HF Download] Sending dndl for asset:", asset_id, "url:", asset_details.url, "dest:", dest_path);
-                this.app.app_state.global_loader_modal_msg = "Downloading " + asset_details.title + "... This may take a while.";
-                this.app.app_state.global_loader_percentage = 0;
                 
+                Vue.set(this.downloading, asset_id, {
+                    id: asset_id,
+                    status: 'downloading',
+                    progress: 0
+                });
+
+                Vue.set(this.app.app_state, 'global_loader_modal_msg', "Downloading " + asset_details.title + "... This may take a while.");
+                Vue.set(this.app.app_state, 'global_loader_percentage', 0);
+                
+                this.app.stable_diffusion.is_input_avail = false;
+                this.app.stable_diffusion.downloading_model_id = asset_id;
+                this.app.stable_diffusion.downloading_asset_ids = [asset_id];
                 send_to_py("dndl " + JSON.stringify({
                     model_url: asset_details.url,
                     dest_path: dest_path,

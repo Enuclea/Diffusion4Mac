@@ -1,0 +1,104 @@
+{
+  "models": {
+    "flux_schnell": {
+      "id": "flux_schnell",
+      "title": "FLUX.1-schnell",
+      "huggingface_repo": "black-forest-labs/FLUX.1-schnell",
+      "r2_key": "models/FLUX.1-schnell",
+      "is_repo": true
+    },
+    "flux_klein_4b": {
+      "id": "flux_klein_4b",
+      "title": "FLUX.2 [klein] (4B)",
+      "huggingface_repo": "black-forest-labs/FLUX.2-klein-4B",
+      "r2_key": "models/FLUX.2-klein-4B",
+      "is_repo": true
+    },
+    "flux_klein": {
+      "id": "flux_klein",
+      "title": "FLUX.2 [klein] (9B)",
+      "huggingface_repo": "black-forest-labs/FLUX.2-klein-9B",
+      "r2_key": "models/FLUX.2-klein-9B",
+      "is_repo": true
+    }
+  },
+  "loras": {
+    "flux_schnell_detailed": {
+      "id": "flux_schnell_detailed",
+      "title": "Detailed Enhancer",
+      "url": "https://huggingface.co/Shakker-Labs/FLUX.1-dev-LoRA-add-details/resolve/main/FLUX-dev-lora-add_details.safetensors",
+      "r2_key": "loras/flux_schnell_detailed.safetensors",
+      "filename": "flux_schnell_detailed.safetensors",
+      "md5": "5d731d1dbf246af0f58670800fa9dbe9",
+      "size_bytes": 687476088
+    },
+    "flux_schnell_cinematic": {
+      "id": "flux_schnell_cinematic",
+      "title": "Cinematic Film",
+      "url": "https://huggingface.co/Shakker-Labs/FilmPortrait/resolve/main/filmfotos.safetensors",
+      "r2_key": "loras/flux_schnell_cinematic.safetensors",
+      "filename": "flux_schnell_cinematic.safetensors",
+      "md5": "edfb5f553a448776be049766f7e8116b",
+      "size_bytes": 612765360
+    },
+    "flux_schnell_portrait": {
+      "id": "flux_schnell_portrait",
+      "title": "Portrait Engine",
+      "url": "https://huggingface.co/strangerzonehf/Flux-Super-Portrait-LoRA/resolve/main/Super-Portrait.safetensors",
+      "r2_key": "loras/flux_schnell_portrait.safetensors",
+      "filename": "flux_schnell_portrait.safetensors",
+      "md5": "adc10619be47defc06567b19780cf3a0",
+      "size_bytes": 612747776
+    },
+    "flux_klein_detailed": {
+      "id": "flux_klein_detailed",
+      "title": "Detailed Enhancer",
+      "url": "https://huggingface.co/dx8152/Flux2-Klein-9B-Enhanced-Details/resolve/main/realistic.safetensors",
+      "r2_key": "loras/flux_klein_detailed.safetensors",
+      "filename": "flux_klein_detailed.safetensors",
+      "md5": "ce20954c9a9f9289e404a346dbfe5a03",
+      "size_bytes": 331379616
+    },
+    "flux_klein_cinematic": {
+      "id": "flux_klein_cinematic",
+      "title": "Cinematic Film",
+      "url": "https://huggingface.co/artificialguybr/CINEMATIC-FILMSTILL-REDMOND-FLUXKLEIN9B/resolve/main/%5BFLUX.2.Klein%5DFilmStill_Redmond.safetensors",
+      "r2_key": "loras/flux_klein_cinematic.safetensors",
+      "filename": "flux_klein_cinematic.safetensors",
+      "md5": "1621dd49525c9e09ab51a3cfafe41212",
+      "size_bytes": 165704488
+    },
+    "flux_klein_portrait": {
+      "id": "flux_klein_portrait",
+      "title": "Portrait Engine",
+      "url": "https://huggingface.co/linoyts/Flux2-Klein-Delight-LoRA/resolve/main/pytorch_lora_weights.safetensors",
+      "r2_key": "loras/flux_klein_portrait.safetensors",
+      "filename": "flux_klein_portrait.safetensors",
+      "md5": "a1e642fc2cbcfe97a73ebfed24b1aa53",
+      "size_bytes": 33564072
+    },
+    "flux_klein_detailed_4b": {
+      "id": "flux_klein_detailed_4b",
+      "title": "Detailed Enhancer (4B)",
+      "url": "https://huggingface.co/lrzjason/Consistance_Edit_Lora/resolve/main/f2k_4B_consist_20260314.safetensors",
+      "r2_key": "loras/f2k_4B_consist_20260314.safetensors",
+      "filename": "f2k_4B_consist_20260314.safetensors",
+      "md5": "3fba947293b94639846e5ec58a1adbfc",
+      "size_bytes": 385379872
+    },
+    "flux_klein_cinematic_4b": {
+      "id": "flux_klein_cinematic_4b",
+      "title": "Cinematic Film (4B)",
+      "url": "https://huggingface.co/lrzjason/Consistance_Edit_Lora/resolve/main/f2k_4B_consist_20260314.safetensors",
+      "r2_key": "loras/f2k_4B_consist_20260314.safetensors",
+      "filename": "f2k_4B_consist_20260314.safetensors"
+    },
+    "flux_klein_portrait_4b": {
+      "id": "flux_klein_portrait_4b",
+      "title": "Portrait Engine (4B)",
+      "url": "https://huggingface.co/lrzjason/Consistance_Edit_Lora/resolve/main/f2k_4B_consist_20260314.safetensors",
+      "r2_key": "loras/f2k_4B_consist_20260314.safetensors",
+      "filename": "f2k_4B_consist_20260314.safetensors"
+    }
+  }
+}

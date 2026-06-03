@@ -14,7 +14,7 @@
         </div>
         <ApplicationFrame ref="app_frame" v-else :title="current_applet_title + ' - ' + 'Diffusion4Mac'" :sidebar_item_on_click="sidebar_item_on_click"
         :sidebar_items="
-            (all_pages_ready ) ?  $refs.router.all_sidebar_items : []
+            (all_pages_ready && $refs.router) ?  $refs.router.all_sidebar_items : []
         " :selected_sidebar_item_id="current_selected_tab"
         :on_home_click="on_home_click"
         > 
@@ -70,6 +70,11 @@ export default
        
     },
 
+    created() {
+        this.app = this;
+        this.app_state.app_object = this;
+    },
+
     mounted() {
         this.app = this;
         window.app = this.app; // so that we can access from console
@@ -80,6 +85,20 @@ export default
 
         bind_app_component(this);
         send_to_py("strt");
+
+        // Register direct download progress handler - bypasses py_vue_bridge chain
+        if (window.bind_download_progress) {
+            let self = this;
+            window.bind_download_progress(function(pct) {
+                console.log("[APP] Direct download_progress callback:", pct,
+                    "current global_loader_percentage:", self.app_state.global_loader_percentage,
+                    "global_loader_modal_msg:", self.app_state.global_loader_modal_msg);
+                if (self.app_state.global_loader_modal_msg) {
+                    // Use Vue.set to guarantee reactivity
+                    Vue.set(self.app_state, 'global_loader_percentage', pct);
+                }
+            });
+        }
 
         if( require('../package.json').is_dev || require('../package.json').build_number.includes("dev") )
             alert("Not checking for updates.")
@@ -133,6 +152,21 @@ export default
         if(data.settings.gemini_api_key == undefined)
             data.settings.gemini_api_key = ""
 
+        if(data.settings.flux_klein_size == undefined)
+            data.settings.flux_klein_size = "9B"
+
+        if(data.settings.flux_vae_slicing == undefined)
+            data.settings.flux_vae_slicing = false
+
+        if(data.settings.flux_vae_tiling == undefined)
+            data.settings.flux_vae_tiling = false
+
+        if(data.settings.flux_attention_slicing == undefined)
+            data.settings.flux_attention_slicing = false
+
+        if(data.settings.flux_sequential_cpu_offload == undefined)
+            data.settings.flux_sequential_cpu_offload = true
+
         if(!data.custom_models){
             data.custom_models = {}
         }
@@ -172,6 +206,21 @@ export default
             },
             deep: true
         } , 
+
+        'app_state.downloaded_assets': {
+            handler: function(new_value) {
+                console.log("[App] downloaded_assets changed, saving to disk...", new_value);
+                window.ipcRenderer.sendSync('save_data', new_value , 'downloaded_assets.json');
+            },
+            deep: true
+        },
+
+        'app_state.global_loader_percentage': {
+            handler: function(new_value, old_value) {
+                console.log("[APP-DEBUG] global_loader_percentage WATCHER fired: " + old_value + " -> " + new_value,
+                    "global_loader_modal_msg=" + this.app_state.global_loader_modal_msg);
+            }
+        },
 
         'is_sd_avail' : {
             handler: function() {
@@ -252,9 +301,14 @@ export default
     },
 
     data() {
+        let downloaded_assets_storage = {};
+        try {
+            downloaded_assets_storage = window.ipcRenderer.sendSync('load_data' , 'downloaded_assets.json');
+        } catch (e) {
+            console.error("Failed to load downloaded_assets.json:", e);
+        }
         let app_state = {
             is_start_screen: true, // if the start screen is showing or not
-            app_object : this , 
             should_show_dialog_on_quit : false ,  // should ask "do you wanna quit" on closing
             show_dialog_on_quit_msg : "" ,  // the message to show while quiting 
             show_splash_screen : true , // is showing the loading splash screen
@@ -264,6 +318,8 @@ export default
             global_loader_percentage: -1,
             registered_ext_applets : {}, // {id, title, desc, icon, inputs, outputs }
             app_data: {history : {}},
+            downloading: {},
+            downloaded_assets: downloaded_assets_storage || {},
         };
 
         return {
@@ -272,7 +328,7 @@ export default
             is_mounted : false, // set when app is mounted
             functions: {},
             app_state: app_state,
-            app: this , // will be set after mount
+            app: null,
             current_selected_tab : "Homepage",
             current_applet_title: "Home",
             is_screen_frozen : true , 

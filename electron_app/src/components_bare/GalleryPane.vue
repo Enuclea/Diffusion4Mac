@@ -86,11 +86,14 @@ export default {
             let th = parseInt(getComputedStyle(document.body).getPropertyValue('--titlebar-height'))
             let pane_h =  window.innerHeight - 30 - th;
 
+            let img_w = this.img_w || 512;
+            let img_h = this.img_h || 512;
+
             let parent_aspect_ratio = (pane_h / pane_w);
 
             let MAX_ALLOWED_IMG_W = 350
             let n_col_max = Math.ceil(pane_w/MAX_ALLOWED_IMG_W)
-            let n_row_max = Math.ceil(pane_h/((MAX_ALLOWED_IMG_W * this.img_h)/this.img_w))
+            let n_row_max = Math.ceil(pane_h/((MAX_ALLOWED_IMG_W * img_h)/img_w))
 
             if( this.always_fixed_col_size ||  this.n_imgs > n_col_max * n_row_max  ){
                let n_col = n_col_max
@@ -117,7 +120,7 @@ export default {
             let best_col_row = {}
             for(let n=1 ; n<=Math.min(10 , n_imgs, n_col_max); n++){
                 let nr = Math.ceil(n_imgs / n )
-                let this_aspect = ( this.img_h *  nr ) / (this.img_w *  n)
+                let this_aspect = ( img_h *  nr ) / (img_w *  n)
                 if (Math.abs(parent_aspect_ratio - this_aspect ) < Math.abs(parent_aspect_ratio - best_aspect )){
                     best_aspect = this_aspect;
                     best_col_row = {'row' : nr , "col" : n }
@@ -143,8 +146,8 @@ export default {
             }
 
 
-            let canv_h = this.img_h *  n_row
-            let canv_w = this.img_w *  n_col
+            let canv_h = img_h *  n_row
+            let canv_w = img_w *  n_col
 
 
             let aspect_ratio_string = canv_w + "/" + canv_h

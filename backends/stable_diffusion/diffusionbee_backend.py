@@ -2,8 +2,211 @@ import sys
 sys.modules['tensorflow'] = None
 sys.modules['keras'] = None
 
+# Apply PyTorch 2.4 compatibility monkeypatch for macOS x86_64 PyTorch 2.2.2
+import importlib.metadata
+orig_metadata_version = importlib.metadata.version
+importlib.metadata.version = lambda name: "2.4.0" if name == "torch" else orig_metadata_version(name)
+
+import types
+import torch
+import torch.nn
+
+if not hasattr(torch.nn, "RMSNorm"):
+    import numbers
+    class DummyRMSNorm(torch.nn.Module):
+        def __init__(self, normalized_shape, eps=1e-05, elementwise_affine=True, device=None, dtype=None):
+            super().__init__()
+            self.eps = eps
+            self.elementwise_affine = elementwise_affine
+            if isinstance(normalized_shape, numbers.Integral):
+                normalized_shape = (normalized_shape,)
+            self.normalized_shape = tuple(normalized_shape)
+            if elementwise_affine:
+                self.weight = torch.nn.Parameter(torch.ones(self.normalized_shape, device=device, dtype=dtype))
+            else:
+                self.register_parameter('weight', None)
+
+        def forward(self, x):
+            input_dtype = x.dtype
+            dims = tuple(range(-len(self.normalized_shape), 0))
+            variance = x.to(torch.float32).pow(2).mean(dim=dims, keepdim=True)
+            norm_x = x * torch.rsqrt(variance + self.eps)
+            if self.elementwise_affine:
+                if self.weight.dtype in [torch.float16, torch.bfloat16]:
+                    norm_x = norm_x.to(self.weight.dtype)
+                return norm_x * self.weight
+            return norm_x.to(input_dtype)
+
+    torch.nn.RMSNorm = DummyRMSNorm
+
+if not hasattr(torch, "get_default_device"):
+    def _get_default_device():
+        try:
+            return torch.device(torch._C._get_default_device())
+        except Exception:
+            return torch.device("cpu")
+    torch.get_default_device = _get_default_device
+
+orig_is_autocast_enabled = torch.is_autocast_enabled
+def new_is_autocast_enabled(device_type="cuda"):
+    if device_type == "cpu":
+        return torch.is_autocast_cpu_enabled()
+    elif device_type == "cuda":
+        return orig_is_autocast_enabled()
+    else:
+        return False
+torch.is_autocast_enabled = new_is_autocast_enabled
+
+torch.__version__ = "2.4.0"
+torch.uint16 = torch.int16
+torch.uint32 = torch.int32
+torch.uint64 = torch.int64
+
+if not hasattr(torch, "xpu"):
+    class DummyXPUMetaclass(type):
+        def __getattr__(cls, name):
+            if name in ('device', 'Event', 'Stream'):
+                return type(name, (), {})
+            return lambda *a, **k: False
+
+    class DummyXPU(metaclass=DummyXPUMetaclass):
+        pass
+
+    torch.xpu = DummyXPU
+
+def dummy_decorator(*args, **kwargs):
+    if len(args) == 1 and not kwargs and callable(args[0]):
+        return args[0]
+    return lambda f: f
+
+# Conditional compiler mock
+if not hasattr(torch, "compiler"):
+    compiler_mod = types.ModuleType("torch.compiler")
+    compiler_mod.is_compiling = lambda: False
+    compiler_mod.disable = dummy_decorator
+    compiler_mod.allow_in_graph = dummy_decorator
+    compiler_mod.assume_constant_result = dummy_decorator
+    torch.compiler = compiler_mod
+    sys.modules["torch.compiler"] = compiler_mod
+else:
+    import torch.compiler
+    if not hasattr(torch.compiler, "is_compiling"):
+        torch.compiler.is_compiling = lambda: False
+    if not hasattr(torch.compiler, "disable"):
+        torch.compiler.disable = dummy_decorator
+    if not hasattr(torch.compiler, "allow_in_graph"):
+        torch.compiler.allow_in_graph = dummy_decorator
+    if not hasattr(torch.compiler, "assume_constant_result"):
+        torch.compiler.assume_constant_result = dummy_decorator
+
+# Conditional library mock
+if not hasattr(torch, "library"):
+    library_mod = types.ModuleType("torch.library")
+    torch.library = library_mod
+    sys.modules["torch.library"] = library_mod
+
+if not hasattr(torch.library, "custom_op"):
+    torch.library.custom_op = dummy_decorator
+if not hasattr(torch.library, "register_fake"):
+    torch.library.register_fake = dummy_decorator
+if not hasattr(torch.library, "register_autograd"):
+    torch.library.register_autograd = dummy_decorator
+
+# Conditional distributed / device_mesh mock
+try:
+    import torch.distributed.device_mesh
+except ImportError:
+    DummyDeviceMesh = type("DeviceMesh", (), {})
+    devmesh_mod = types.ModuleType("torch.distributed.device_mesh")
+    devmesh_mod.DeviceMesh = DummyDeviceMesh
+    sys.modules["torch.distributed.device_mesh"] = devmesh_mod
+    import torch.distributed
+    torch.distributed.device_mesh = devmesh_mod
+
+# Conditional distributed / tensor mock
+try:
+    import torch.distributed.tensor
+except ImportError:
+    tensor_mod = types.ModuleType("torch.distributed.tensor")
+    sys.modules["torch.distributed.tensor"] = tensor_mod
+    torch.distributed.tensor = tensor_mod
+    
+    td_mesh_mod = types.ModuleType("torch.distributed.tensor.device_mesh")
+    td_mesh_mod.DeviceMesh = DummyDeviceMesh
+    sys.modules["torch.distributed.tensor.device_mesh"] = td_mesh_mod
+    torch.distributed.tensor.device_mesh = td_mesh_mod
+
+import torch.amp
+try:
+    from torch.cuda.amp import GradScaler
+    torch.amp.GradScaler = GradScaler
+except ImportError:
+    pass
+
+
 import json
 import os
+
+def emit_progress(percent):
+    """Write progress directly to fd 1 (stdout) bypassing Python buffering."""
+    msg = f"sdbk mlpr {percent}\n"
+    try:
+        os.write(1, msg.encode("utf-8"))
+    except Exception:
+        pass
+
+# Global tracking variables for tqdm monkey patch
+hf_downloaded_bytes = 0
+hf_total_repo_size = 0
+hf_last_pct_emitted = -1
+
+# --- Monkey patch huggingface_hub tqdm to enable real-time progress updates ---
+try:
+    import huggingface_hub.utils
+    import huggingface_hub.constants
+    
+    # 1. Force smaller chunks for more frequent progress updates (1MB chunks)
+    huggingface_hub.constants.DOWNLOAD_CHUNK_SIZE = 1024 * 1024
+    
+    # 2. Keep track of original tqdm methods
+    _original_tqdm_init = huggingface_hub.utils.tqdm.__init__
+    _original_tqdm_update = huggingface_hub.utils.tqdm.update
+
+    def patched_tqdm_init(self, *args, **kwargs):
+        # Force progress bar to be enabled even in non-TTY/background subprocesses
+        kwargs["disable"] = False
+        _original_tqdm_init(self, *args, **kwargs)
+
+    def patched_tqdm_update(self, n=1):
+        global hf_downloaded_bytes, hf_total_repo_size, hf_last_pct_emitted
+        res = _original_tqdm_update(self, n)
+        
+        if hf_total_repo_size > 0:
+            effective = hf_downloaded_bytes + self.n
+            pct = min(99, int(effective / hf_total_repo_size * 100))
+            if pct > hf_last_pct_emitted:
+                hf_last_pct_emitted = pct
+                emit_progress(pct)
+        return res
+
+    huggingface_hub.utils.tqdm.__init__ = patched_tqdm_init
+    huggingface_hub.utils.tqdm.update = patched_tqdm_update
+except Exception as e:
+    import sys
+    sys.stderr.write(f"[D4M] Failed to patch huggingface_hub tqdm: {e}\n")
+    sys.stderr.flush()
+
+# Load environment variables from .env if present in CWD or parent dir
+for env_path in (".env", "../.env"):
+    if os.path.exists(env_path):
+        try:
+            with open(env_path, "r") as f:
+                for line in f:
+                    if "=" in line and not line.strip().startswith("#"):
+                        k, v = line.strip().split("=", 1)
+                        os.environ[k.strip()] = v.strip()
+        except Exception:
+            pass
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["TRANSFORMERS_NO_TF"] = "1"
 import random
@@ -14,9 +217,42 @@ import torch
 from diffusers import FluxPipeline, FluxImg2ImgPipeline, FluxInpaintPipeline
 
 try:
-    from diffusers import Flux2KleinPipeline, Flux2KleinInpaintPipeline
-except ImportError:
-    pass
+    try:
+        from pipeline_flux2_klein import Flux2KleinPipeline
+        from pipeline_flux2_klein_inpaint import Flux2KleinInpaintPipeline
+        print("sdbk info Imported Flux2KleinPipeline directly")
+    except ImportError:
+        from backends.stable_diffusion.pipeline_flux2_klein import Flux2KleinPipeline
+        from backends.stable_diffusion.pipeline_flux2_klein_inpaint import Flux2KleinInpaintPipeline
+        print("sdbk info Imported Flux2KleinPipeline via backends.stable_diffusion package")
+except Exception as e:
+    print(f"sdbk errr Failed to import Flux2KleinPipeline: {e}")
+    import traceback
+    traceback.print_exc()
+
+# Apply transformers.masking_utils.sdpa_mask monkeypatch for Apple Silicon (MPS) compatibility
+# This avoids a PyTorch vmap/comparison compilation bug on MPS that triggers "RuntimeError: Invalid buffer size"
+import transformers.masking_utils
+
+def dummy_sdpa_mask(
+    batch_size,
+    cache_position,
+    kv_length,
+    kv_offset=0,
+    mask_function=None,
+    attention_mask=None,
+    allow_is_causal_skip=True,
+    **kwargs
+):
+    q_idx = (cache_position.cpu() + kv_offset).view(-1, 1)
+    kv_idx = torch.arange(kv_length, device="cpu").view(1, -1)
+    causal_mask = kv_idx <= q_idx
+    causal_mask = causal_mask.unsqueeze(0).unsqueeze(0).expand(batch_size, 1, -1, -1)
+    if attention_mask is not None:
+        causal_mask = causal_mask & attention_mask.cpu().view(batch_size, 1, 1, kv_length).to(torch.bool)
+    return causal_mask.contiguous().to(cache_position.device)
+
+transformers.masking_utils.sdpa_mask = dummy_sdpa_mask
 
 print("starting backend")
 
@@ -157,10 +393,46 @@ def resolve_hf_url(url, token=None):
         print(f"Error resolving HF URL {url} via hf_hub_download: {e}")
     return url
 
+def make_progress_callback(num_steps):
+    def progress_callback(pipe_self, step_index, timestep, callback_kwargs):
+        percent = int((step_index + 1) / max(1, num_steps) * 100)
+        percent = min(100, max(0, percent))
+        print(f"sdbk dnpr {percent}")
+        sys.stdout.flush()
+        return callback_kwargs
+    return progress_callback
+
+def patch_vae_for_mps(pipeline):
+    if not pipeline or not hasattr(pipeline, "vae") or pipeline.vae is None:
+        return
+    
+    # 1. Ensure VAE is in float32 on MPS
+    pipeline.vae.to(dtype=torch.float32)
+    
+    # 2. Monkeypatch vae.decode to force input latents to float32
+    if hasattr(pipeline.vae, "decode"):
+        orig_decode = pipeline.vae.decode
+        def patched_decode(latents, *args, **kwargs):
+            if isinstance(latents, torch.Tensor):
+                latents = latents.to(torch.float32)
+            return orig_decode(latents, *args, **kwargs)
+        pipeline.vae.decode = patched_decode
+        
+    # 3. Monkeypatch vae.encode to force input image to float32
+    if hasattr(pipeline.vae, "encode"):
+        orig_encode = pipeline.vae.encode
+        def patched_encode(x, *args, **kwargs):
+            if isinstance(x, torch.Tensor):
+                x = x.to(torch.float32)
+            return orig_encode(x, *args, **kwargs)
+        pipeline.vae.encode = patched_encode
+
 def main():
+    home_path = os.path.expanduser("~")
     print("sdbk mdld") # notify UI model logic is ready to load/run
 
     current_model = None
+    current_sequential_offload = None
     pipe = None
     pipe_img2img = None
     pipe_kv = None
@@ -178,6 +450,7 @@ def main():
 
         if "b2py dndl" in inp_str:
             print("sdbk inwk")
+            sys.stdout.flush()
             try:
                 json_str = inp_str.replace("b2py dndl", "").strip()
                 data = json.loads(json_str)
@@ -190,108 +463,407 @@ def main():
                     os.environ["HF_TOKEN"] = token
                     os.environ["HUGGING_FACE_HUB_TOKEN"] = token
 
+                def emit_progress(percent):
+                    """Write progress directly to fd 1 (stdout) bypassing Python buffering."""
+                    msg = f"sdbk mlpr {percent}\n"
+                    os.write(1, msg.encode("utf-8"))
+
                 model_url = data.get("model_url", None)
+                sys.stderr.write(f"[D4M] dndl handler: model_url={model_url is not None}, data keys={list(data.keys())}\n")
+                sys.stderr.flush()
                 if model_url:
+                    # --- SINGLE FILE DOWNLOAD (LoRAs) ---
                     dest_path = data.get("dest_path")
                     asset_id = data.get("asset_id", "lora")
                     
-                    # Parse Hugging Face URL
-                    import urllib.parse
-                    from huggingface_hub import hf_hub_download
-                    from tqdm.auto import tqdm
-                    import shutil
-                    
-                    parsed = urllib.parse.urlparse(model_url)
-                    path_decoded = urllib.parse.unquote(parsed.path)
-                    parts = [p for p in path_decoded.split('/') if p]
-                    
-                    repo_type = "model"
-                    if parts and parts[0] == "datasets":
-                        repo_type = "dataset"
-                        parts = parts[1:]
-                    elif parts and parts[0] == "spaces":
-                        repo_type = "space"
-                        parts = parts[1:]
-                        
-                    if len(parts) >= 5 and parts[2] == "resolve":
-                        repo_id = f"{parts[0]}/{parts[1]}"
-                        revision = parts[3]
-                        filename = "/".join(parts[4:])
-                        
-                        print(f"sdbk mltl Downloading asset:{asset_id}")
-                        sys.stdout.flush()
-                        
-                        import huggingface_hub.utils
-                        orig_init = huggingface_hub.utils.tqdm.__init__
-                        orig_update = huggingface_hub.utils.tqdm.update
-
-                        def custom_init(self, *args, **kwargs):
-                            kwargs['disable'] = False
-                            orig_init(self, *args, **kwargs)
-                            self._last_printed = -1
-
-                        def custom_update(self, n=1):
-                            orig_update(self, n)
-                            if self.total:
-                                percent = int((self.n / self.total) * 100)
-                                if percent > getattr(self, '_last_printed', -1):
-                                    self._last_printed = percent
-                                    print(f"sdbk mlpr {percent}")
-                                    sys.stdout.flush()
-
-                        huggingface_hub.utils.tqdm.__init__ = custom_init
-                        huggingface_hub.utils.tqdm.update = custom_update
-                        
-                        try:
-                            local_path = hf_hub_download(
-                                repo_id=repo_id,
-                                filename=filename,
-                                revision=revision,
-                                repo_type=repo_type,
-                                token=token
-                            )
-                        finally:
-                            huggingface_hub.utils.tqdm.__init__ = orig_init
-                            huggingface_hub.utils.tqdm.update = orig_update
-                        
-                        # Copy the file to dest_path
-                        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-                        shutil.copy(local_path, dest_path)
-                        # Always report 100% before completion (handles cached files with no tqdm callbacks)
-                        print("sdbk mlpr 100")
-                        sys.stdout.flush()
+                    # Skip if file already exists
+                    if dest_path and os.path.exists(dest_path) and os.path.getsize(dest_path) > 1000:
+                        sys.stderr.write(f"[D4M] LoRA {asset_id} already exists at {dest_path}, skipping download\n")
+                        sys.stderr.flush()
+                        emit_progress(100)
                         print("sdbk mdld")
                         sys.stdout.flush()
-                    else:
-                        raise ValueError(f"Invalid Hugging Face URL format: {model_url}")
-                else:
-                    model_name = data.get("model", "black-forest-labs/FLUX.2-klein-9B")
-                    print("sdbk mltl Downloading " + model_name)
+                        continue
+                    
+                    print(f"sdbk mltl Downloading asset:{asset_id}")
                     sys.stdout.flush()
+                    
+                    import requests as dl_requests
+                    import urllib.parse
+                    
+                    # 1. Look up R2 key in registry.json for this asset_id
+                    r2_key = None
+                    for reg_path in ("../cdn_mirror/registry.json", "cdn_mirror/registry.json", "backends/stable_diffusion/registry.json", "registry.json"):
+                        if os.path.exists(reg_path):
+                            try:
+                                with open(reg_path, "r") as rf:
+                                    registry_data = json.load(rf)
+                                    loras_dict = registry_data.get("loras", {})
+                                    if asset_id in loras_dict:
+                                        r2_key = loras_dict[asset_id].get("r2_key")
+                                    break
+                            except Exception:
+                                pass
 
-                    from huggingface_hub import snapshot_download
-                    from tqdm.auto import tqdm
+                    # 2. If cloudflare_id and r2_key are present, construct the CDN URL
+                    cloudflare_id = os.environ.get("cloudflare_id")
+                    cloudflare_token = os.environ.get("cloudflare_token")
+                    
+                    cdn_url = None
+                    if cloudflare_id and r2_key:
+                        cdn_base = os.environ.get("cdn_base_url")
+                        if cdn_base:
+                            cdn_url = f"{cdn_base.rstrip('/')}/{r2_key}"
+                        else:
+                            cdn_url = f"https://cdn.diffusion4mac.com/{r2_key}"
 
-                    class HuggingFaceDownloadProgress(tqdm):
-                        def __init__(self, *args, **kwargs):
-                            super().__init__(*args, **kwargs)
-                            self._last_printed = -1
-                        def update(self, n=1):
-                            super().update(n)
-                            if self.total:
-                                percent = int((self.n / self.total) * 100)
-                                if percent > self._last_printed:
-                                    self._last_printed = percent
-                                    print(f"sdbk mlpr {percent}")
-                                    sys.stdout.flush()
+                    # 3. Request URL resolution: try CDN first, fallback to Hugging Face
+                    response = None
+                    if cdn_url:
+                        sys.stderr.write(f"[D4M] Attempting download from CDN: {cdn_url[:80]}...\n")
+                        sys.stderr.flush()
+                        
+                        # Use the User-Agent and/or the read-only client key (X-D4M-Client-Key)
+                        # to authorize the request on the Cloudflare CDN side and prevent third-party hotlinking.
+                        # This client-side token is read-only and does not possess write privileges.
+                        cdn_headers = {"User-Agent": "Diffusion4Mac"}
+                        if cloudflare_token:
+                            cdn_headers["X-D4M-Client-Key"] = cloudflare_token
+                        
+                        try:
+                            # Workers might redirect to R2 internally, but let's check
+                            r = dl_requests.get(cdn_url, headers=cdn_headers, stream=True, allow_redirects=True, timeout=60)
+                            if r.status_code in (200, 206):
+                                response = r
+                                sys.stderr.write(f"[D4M] CDN download started successfully (status={r.status_code})\n")
+                                sys.stderr.flush()
+                            else:
+                                sys.stderr.write(f"[D4M] CDN returned status {r.status_code}, falling back to Hugging Face\n")
+                                sys.stderr.flush()
+                        except Exception as e:
+                            sys.stderr.write(f"[D4M] CDN connection failed: {e}, falling back to Hugging Face\n")
+                            sys.stderr.flush()
 
-                    snapshot_download(
-                        repo_id=model_name,
-                        token=token,
-                        tqdm_class=HuggingFaceDownloadProgress
-                    )
+                    if not response:
+                        # Fallback: Build Hugging Face auth header
+                        headers = {}
+                        if token:
+                            headers["Authorization"] = f"Bearer {token}"
+                        
+                        current_url = model_url
+                        max_redirects = 10
+                        for redirect_step in range(max_redirects):
+                            sys.stderr.write(f"[D4M] HF Fallback: Requesting {current_url[:120]} (step {redirect_step})...\n")
+                            sys.stderr.flush()
+                            
+                            r = dl_requests.get(current_url, headers=headers, stream=True, allow_redirects=False, timeout=60)
+                            
+                            if r.status_code in (301, 302, 303, 307, 308):
+                                location = r.headers.get("Location")
+                                if not location:
+                                    response = r
+                                    break
+                                
+                                next_url = urllib.parse.urljoin(current_url, location)
+                                parsed_current = urllib.parse.urlparse(current_url)
+                                parsed_next = urllib.parse.urlparse(next_url)
+                                
+                                if parsed_next.netloc != parsed_current.netloc:
+                                    sys.stderr.write(f"[D4M] Host changed from {parsed_current.netloc} to {parsed_next.netloc}. Stripping Authorization header.\n")
+                                    sys.stderr.flush()
+                                    headers = {k: v for k, v in headers.items() if k.lower() != 'authorization'}
+                                
+                                current_url = next_url
+                            else:
+                                response = r
+                                break
+                        
+                        if not response:
+                            raise Exception("Failed to establish redirect connection")
+                    
+                    response.raise_for_status()
+                    
+                    total_size = int(response.headers.get("content-length", 0))
+                    sys.stderr.write(f"[D4M] LoRA: content-length={total_size}, status={response.status_code}\n")
+                    sys.stderr.flush()
+                    downloaded = 0
+                    last_percent = -1
+                    
+                    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                    with open(dest_path, "wb") as f:
+                        for chunk in response.iter_content(chunk_size=256 * 1024):
+                            if chunk:
+                                f.write(chunk)
+                                downloaded += len(chunk)
+                                if total_size > 0:
+                                    percent = min(99, int(downloaded / total_size * 100))
+                                    if percent > last_percent:
+                                        last_percent = percent
+                                        emit_progress(percent)
+                    
+                    emit_progress(100)
                     print("sdbk mdld")
                     sys.stdout.flush()
+                else:
+                    # --- FULL REPO DOWNLOAD (base models) ---
+                    model_name = data.get("model", "black-forest-labs/FLUX.2-klein-9B")
+                    
+                    # Fast local cache check — avoid download modal if already cached
+                    repo_folder_name = "models--" + model_name.replace("/", "--")
+                    cache_dir = os.path.expanduser(f"~/.cache/huggingface/hub/{repo_folder_name}")
+                    ref_path = os.path.join(cache_dir, "refs", "main")
+                    is_cached = False
+                    if os.path.exists(ref_path):
+                        try:
+                            with open(ref_path) as rf:
+                                commit = rf.read().strip()
+                            snapshot_dir = os.path.join(cache_dir, "snapshots", commit)
+                            if os.path.isdir(snapshot_dir) and len(os.listdir(snapshot_dir)) > 5:
+                                is_cached = True
+                        except Exception:
+                            pass
+                    
+                    if is_cached:
+                        sys.stderr.write(f"[D4M] Model {model_name} already cached, skipping download\n")
+                        sys.stderr.flush()
+                        emit_progress(100)
+                        print("sdbk mdld")
+                        sys.stdout.flush()
+                        continue
+                    
+                    print("sdbk mltl Downloading " + model_name)
+                    sys.stdout.flush()
+                    
+                    # Emit 0% immediately so UI switches from spinner to progress bar
+                    emit_progress(0)
+
+                    # Look up in registry
+                    model_info = None
+                    # Load registry if needed
+                    registry_data = {}
+                    for reg_path in ("../cdn_mirror/registry.json", "cdn_mirror/registry.json", "backends/stable_diffusion/registry.json", "registry.json"):
+                        if os.path.exists(reg_path):
+                            try:
+                                with open(reg_path, "r") as rf:
+                                    registry_data = json.load(rf)
+                                break
+                            except Exception: pass
+                    
+                    for m_id, m_info in registry_data.get("models", {}).items():
+                        if m_info.get("huggingface_repo") == model_name or m_info.get("id") == model_name:
+                            model_info = m_info
+                            break
+
+                    downloaded_from_cdn = False
+                    cloudflare_id = os.environ.get("cloudflare_id")
+                    cloudflare_token = os.environ.get("cloudflare_token")
+                    home_path = os.path.expanduser("~")
+                    import requests as dl_requests
+
+                    if cloudflare_id and model_info and model_info.get("r2_key"):
+                        r2_key = model_info.get("r2_key") + ".zip"
+                        cdn_base = os.environ.get("cdn_base_url")
+                        if cdn_base:
+                            cdn_url = f"{cdn_base.rstrip('/')}/{r2_key}"
+                        else:
+                            cdn_url = f"https://cdn.diffusion4mac.com/{r2_key}"
+
+                        sys.stderr.write(f"[D4M] Attempting base model download from CDN: {cdn_url[:80]}...\n")
+                        sys.stderr.flush()
+                        
+                        # Use the User-Agent and/or the read-only client key (X-D4M-Client-Key)
+                        # to authorize the request on the Cloudflare CDN side and prevent third-party hotlinking.
+                        # This client-side token is read-only and does not possess write privileges.
+                        cdn_headers = {"User-Agent": "Diffusion4Mac"}
+                        if cloudflare_token:
+                            cdn_headers["X-D4M-Client-Key"] = cloudflare_token
+                        
+                        try:
+                            # 1. Get remote file size using HEAD
+                            head_headers = cdn_headers.copy()
+                            try:
+                                h = dl_requests.head(cdn_url, headers=head_headers, allow_redirects=True, timeout=15)
+                                h.raise_for_status()
+                                total_size = int(h.headers.get("content-length", 0))
+                            except Exception as e:
+                                sys.stderr.write(f"[D4M] CDN HEAD request failed: {e}. Trying GET directly...\n")
+                                sys.stderr.flush()
+                                total_size = 0
+
+                            temp_zip = os.path.join(home_path, ".diffusionbee", f"temp_{model_info['id']}.zip")
+                            os.makedirs(os.path.dirname(temp_zip), exist_ok=True)
+                            
+                            downloaded = 0
+                            if os.path.exists(temp_zip) and total_size > 0:
+                                local_size = os.path.getsize(temp_zip)
+                                if local_size < total_size:
+                                    downloaded = local_size
+                                    sys.stderr.write(f"[D4M] Local partial zip found ({downloaded / (1024*1024*1024):.2f} GB). Resuming download...\n")
+                                    sys.stderr.flush()
+                                elif local_size == total_size:
+                                    downloaded = total_size
+                                    sys.stderr.write(f"[D4M] Local zip is already fully downloaded. Proceeding to extract...\n")
+                                    sys.stderr.flush()
+                                else:
+                                    # Local file is larger (corrupted?), reset
+                                    try: os.remove(temp_zip)
+                                    except Exception: pass
+                            else:
+                                if os.path.exists(temp_zip):
+                                    try: os.remove(temp_zip)
+                                    except Exception: pass
+
+                            max_retries = 20
+                            retry_delay = 5
+                            import time
+                            
+                            download_success = False
+                            if downloaded >= total_size and total_size > 0:
+                                download_success = True
+                                
+                            while downloaded < total_size or (total_size == 0 and not download_success):
+                                req_headers = cdn_headers.copy()
+                                if downloaded > 0:
+                                    req_headers["Range"] = f"bytes={downloaded}-"
+                                    write_mode = "ab"
+                                else:
+                                    write_mode = "wb"
+                                    
+                                try:
+                                    r = dl_requests.get(cdn_url, headers=req_headers, stream=True, allow_redirects=True, timeout=30)
+                                    if r.status_code == 200:
+                                        write_mode = "wb"
+                                        downloaded = 0
+                                        if total_size == 0:
+                                            total_size = int(r.headers.get("content-length", 0))
+                                    elif r.status_code == 206:
+                                        pass
+                                    else:
+                                        r.raise_for_status()
+                                        
+                                    last_percent = -1
+                                    with open(temp_zip, write_mode) as f:
+                                        for chunk in r.iter_content(chunk_size=1024 * 1024):
+                                            if chunk:
+                                                f.write(chunk)
+                                                downloaded += len(chunk)
+                                                if total_size > 0:
+                                                    percent = min(99, int(downloaded / total_size * 100))
+                                                    if percent > last_percent:
+                                                        last_percent = percent
+                                                        emit_progress(percent)
+                                                        
+                                    if total_size > 0 and downloaded >= total_size:
+                                        download_success = True
+                                        break
+                                    elif total_size == 0:
+                                        download_success = True
+                                        break
+                                except Exception as e:
+                                    sys.stderr.write(f"[D4M] CDN download connection interrupted: {e}. Retrying in {retry_delay}s...\n")
+                                    sys.stderr.flush()
+                                    max_retries -= 1
+                                    if max_retries <= 0:
+                                        raise Exception(f"CDN download failed after max retries: {e}")
+                                    time.sleep(retry_delay)
+                                    if os.path.exists(temp_zip):
+                                        downloaded = os.path.getsize(temp_zip)
+
+                            if download_success:
+                                emit_progress(99)
+                                sys.stderr.write(f"[D4M] CDN download complete. Extracting zip archive...\n")
+                                sys.stderr.flush()
+                                
+                                # Unzip to target directory
+                                dest_dir = os.path.join(home_path, ".diffusionbee", "downloaded_assets", "models", model_info["id"])
+                                os.makedirs(dest_dir, exist_ok=True)
+                                
+                                import zipfile
+                                with zipfile.ZipFile(temp_zip, 'r') as zip_ref:
+                                    zip_ref.extractall(dest_dir)
+                                
+                                # Cleanup
+                                os.remove(temp_zip)
+                                
+                                downloaded_from_cdn = True
+                                emit_progress(100)
+                                print("sdbk mdld")
+                                sys.stdout.flush()
+                                sys.stderr.write("[D4M] Model successfully deployed from CDN!\n")
+                                sys.stderr.flush()
+                            else:
+                                raise Exception("Download loop finished without success.")
+                        except Exception as e:
+                            sys.stderr.write(f"[D4M] CDN download failed: {e}, falling back to Hugging Face\n")
+                            sys.stderr.flush()
+                            # Clean up if download wasn't successful to prevent corruption later
+                            if not download_success:
+                                temp_zip = os.path.join(home_path, ".diffusionbee", f"temp_{model_info['id']}.zip")
+                                if os.path.exists(temp_zip):
+                                    try: os.remove(temp_zip)
+                                    except Exception: pass
+
+                    if not downloaded_from_cdn:
+                        from huggingface_hub import hf_hub_download, list_repo_tree
+                        import threading
+
+                        # Single API call: get file list AND total size
+                        repo_files = []
+                        total_repo_size = 0
+                        try:
+                            for f in list_repo_tree(model_name, token=token, recursive=True):
+                                if hasattr(f, 'rfilename') and f.rfilename:
+                                    repo_files.append(f)
+                                    if hasattr(f, 'size') and f.size is not None:
+                                        total_repo_size += f.size
+                        except Exception:
+                            pass
+
+                        sys.stderr.write(f"[D4M] Repo {model_name}: {len(repo_files)} files, {total_repo_size} bytes\n")
+                        sys.stderr.flush()
+
+                        # Initialize global progress tracking for tqdm patch
+                        global hf_downloaded_bytes, hf_total_repo_size, hf_last_pct_emitted
+                        hf_downloaded_bytes = 0
+                        hf_total_repo_size = total_repo_size
+                        hf_last_pct_emitted = -1
+
+                        try:
+                            for idx, f in enumerate(repo_files):
+                                file_expected = getattr(f, 'size', 0) or 0
+                                
+                                try:
+                                    local_path = hf_hub_download(
+                                        repo_id=model_name,
+                                        filename=f.rfilename,
+                                        token=token
+                                    )
+                                    try:
+                                        file_size = os.path.getsize(local_path)
+                                    except OSError:
+                                        file_size = file_expected
+                                    hf_downloaded_bytes += file_size
+                                except Exception as e:
+                                    sys.stderr.write(f"[D4M] Error downloading {f.rfilename}: {e}\n")
+                                    sys.stderr.flush()
+                                    hf_downloaded_bytes += file_expected
+                                
+                                # Emit progress: prefer byte-based, fallback to file-count
+                                if hf_total_repo_size > 0:
+                                    pct = min(99, int(hf_downloaded_bytes / hf_total_repo_size * 100))
+                                else:
+                                    pct = min(99, int((idx + 1) / max(len(repo_files), 1) * 100))
+                                if pct > hf_last_pct_emitted:
+                                    hf_last_pct_emitted = pct
+                                    emit_progress(pct)
+                            
+                            emit_progress(100)
+                            print("sdbk mdld")
+                            sys.stdout.flush()
+                            sys.stderr.write("[D4M] Download complete\n")
+                            sys.stderr.flush()
+                        except Exception as inner_e:
+                            raise inner_e
             except Exception as e:
                 print(f"sdbk errr {str(e)}")
                 sys.stdout.flush()
@@ -328,6 +900,13 @@ def main():
             # advanced custom form tags
             raw_form_options = data.get("raw_form_options", {})
             model_selection = raw_form_options.get("model_selection", "Flux Schnell") or data.get("model_selection", "Flux Schnell")
+            
+            # Low-end system optimization parameters
+            flux_vae_slicing = data.get("flux_vae_slicing", False)
+            flux_vae_tiling = data.get("flux_vae_tiling", False)
+            flux_attention_slicing = data.get("flux_attention_slicing", False)
+            flux_sequential_cpu_offload = data.get("flux_sequential_cpu_offload", False)
+            flux_klein_size = data.get("flux_klein_size", "9B")
             
             # Retrieve LoRA parameters from root data (injected via LoraStore) or fallback to raw_form_options (advanced UI field)
             lora_path = data.get("lora_path", None) or raw_form_options.get("lora_path", None)
@@ -391,17 +970,33 @@ def main():
             # Handle parsed options
             print(f"Backend options: model_selection={model_selection}, input_image_path={input_image_path}")
             print(f"Loaded {len(guide_images)} guide images.")
-
-            model_id = "black-forest-labs/FLUX.1-schnell"
+            
+            # Resolve model ID or local directory
+            model_key = "flux_schnell"
             if model_selection == "Flux Klein":
-                model_id = "black-forest-labs/FLUX.2-klein-9B"
+                if flux_klein_size == "4B":
+                    model_key = "flux_klein_4b"
+                else:
+                    model_key = "flux_klein"
+            
+            # Check if local model directory exists
+            local_model_dir = os.path.join(str(home_path), ".diffusionbee", "downloaded_assets", "models", model_key)
+            if os.path.isdir(local_model_dir):
+                model_id = local_model_dir
+            else:
+                model_id = "black-forest-labs/FLUX.1-schnell"
+                if model_selection == "Flux Klein":
+                    if flux_klein_size == "4B":
+                        model_id = "black-forest-labs/FLUX.2-klein-4B"
+                    else:
+                        model_id = "black-forest-labs/FLUX.2-klein-9B"
 
             device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
-            dtype = torch.bfloat16
+            dtype = torch.float16 if device == "mps" else torch.bfloat16
 
-            # Setup pipeline if model changed or uninitialized
-            if current_model != model_id:
-                print("sdbk mdld Loading model weights...")
+            # Setup pipeline if model changed, sequential offload state changed, or uninitialized
+            if current_model != model_id or current_sequential_offload != flux_sequential_cpu_offload:
+                print(f"sdbk mdld Loading model weights (model_id={model_id}, sequential_offload={flux_sequential_cpu_offload})...")
                 
                 if pipe is not None:
                     del pipe
@@ -414,8 +1009,23 @@ def main():
 
                 if model_selection == "Flux Klein" and "Flux2KleinPipeline" in globals():
                     # use standard pipeline for klein multi-image editing or standard text2img
-                    pipe = Flux2KleinPipeline.from_pretrained(model_id, torch_dtype=dtype, token=hf_token)
-                    if hasattr(pipe, "enable_model_cpu_offload"):
+                    pipe = Flux2KleinPipeline.from_pretrained(model_id, torch_dtype=dtype, token=hf_token, low_cpu_mem_usage=False)
+                    if device == "mps":
+                        patch_vae_for_mps(pipe)
+                    import psutil
+                    total_ram_gb = psutil.virtual_memory().total / (1024 ** 3)
+                    force_sequential = total_ram_gb <= 12.0
+                    if (flux_sequential_cpu_offload or force_sequential) and hasattr(pipe, "enable_sequential_cpu_offload"):
+                        print(f"sdbk info Enabling sequential CPU offload (force={force_sequential}, total_ram={total_ram_gb:.1f}GB)...")
+                        try:
+                            pipe.enable_sequential_cpu_offload(device=device)
+                        except Exception as e:
+                            print(f"sdbk warn Sequential CPU offload failed: {e}")
+                            if hasattr(pipe, "enable_model_cpu_offload"):
+                                    pipe.enable_model_cpu_offload(device=device)
+                            else:
+                                pipe.to(device)
+                    elif hasattr(pipe, "enable_model_cpu_offload"):
                         try:
                             pipe.enable_model_cpu_offload(device=device)
                         except Exception as e:
@@ -425,10 +1035,27 @@ def main():
                         pipe.to(device)
                     if "Flux2KleinInpaintPipeline" in globals():
                         pipe_inpaint = Flux2KleinInpaintPipeline(**pipe.components)
+                        if device == "mps":
+                            patch_vae_for_mps(pipe_inpaint)
                 else:
                     # Schnell or standard Klein
                     pipe = FluxPipeline.from_pretrained(model_id, torch_dtype=dtype, token=hf_token)
-                    if hasattr(pipe, "enable_model_cpu_offload"):
+                    if device == "mps":
+                        patch_vae_for_mps(pipe)
+                    import psutil
+                    total_ram_gb = psutil.virtual_memory().total / (1024 ** 3)
+                    force_sequential = total_ram_gb <= 12.0
+                    if (flux_sequential_cpu_offload or force_sequential) and hasattr(pipe, "enable_sequential_cpu_offload"):
+                        print(f"sdbk info Enabling sequential CPU offload (force={force_sequential}, total_ram={total_ram_gb:.1f}GB)...")
+                        try:
+                            pipe.enable_sequential_cpu_offload(device=device)
+                        except Exception as e:
+                            print(f"sdbk warn Sequential CPU offload failed: {e}")
+                            if hasattr(pipe, "enable_model_cpu_offload"):
+                                pipe.enable_model_cpu_offload(device=device)
+                            else:
+                                pipe.to(device)
+                    elif hasattr(pipe, "enable_model_cpu_offload"):
                         try:
                             pipe.enable_model_cpu_offload(device=device)
                         except Exception as e:
@@ -437,10 +1064,15 @@ def main():
                     else:
                         pipe.to(device)
                     pipe_img2img = FluxImg2ImgPipeline(**pipe.components)
+                    if device == "mps":
+                        patch_vae_for_mps(pipe_img2img)
                     if "FluxInpaintPipeline" in globals():
                         pipe_inpaint = FluxInpaintPipeline(**pipe.components)
+                        if device == "mps":
+                            patch_vae_for_mps(pipe_inpaint)
 
                 current_model = model_id
+                current_sequential_offload = flux_sequential_cpu_offload
 
             # Handle LoRA weights loading/unloading
             def apply_loras(pipeline, paths, weights):
@@ -548,7 +1180,51 @@ def main():
                 else:
                     active_pipe = pipe
 
+            # Apply VAE/Attention optimizations on active pipeline
+            if active_pipe is not None:
+                if flux_vae_slicing and hasattr(active_pipe, "enable_vae_slicing"):
+                    try:
+                        active_pipe.enable_vae_slicing()
+                    except Exception as e:
+                        print(f"sdbk warn enable_vae_slicing failed: {e}")
+                elif hasattr(active_pipe, "disable_vae_slicing"):
+                    try:
+                        active_pipe.disable_vae_slicing()
+                    except Exception:
+                        pass
+
+                if flux_vae_tiling and hasattr(active_pipe, "enable_vae_tiling"):
+                    try:
+                        active_pipe.enable_vae_tiling()
+                    except Exception as e:
+                        print(f"sdbk warn enable_vae_tiling failed: {e}")
+                elif hasattr(active_pipe, "disable_vae_tiling"):
+                    try:
+                        active_pipe.disable_vae_tiling()
+                    except Exception:
+                        pass
+
+                if flux_attention_slicing and hasattr(active_pipe, "enable_attention_slicing"):
+                    try:
+                        active_pipe.enable_attention_slicing()
+                    except Exception as e:
+                        print(f"sdbk warn enable_attention_slicing failed: {e}")
+                elif hasattr(active_pipe, "disable_attention_slicing"):
+                    try:
+                        active_pipe.disable_attention_slicing()
+                    except Exception:
+                        pass
+
             apply_loras(active_pipe, lora_paths, lora_weights)
+
+            # Aggressive memory cleanup before generation to prevent MPS OOM
+            import gc
+            gc.collect()
+            if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                if hasattr(torch.mps, 'empty_cache'):
+                    torch.mps.empty_cache()
+                if hasattr(torch.mps, 'synchronize'):
+                    torch.mps.synchronize()
 
             generator = torch.Generator(device=device).manual_seed(seed)
 
@@ -557,7 +1233,10 @@ def main():
                     mask_image = mask_image.resize(input_image.size)
 
             for i in range(num_imgs):
-                print(f"sdbk dnpr {i}/{num_imgs}")
+                print("sdbk dnpr 0")
+                sys.stdout.flush()
+
+                progress_cb = make_progress_callback(num_steps)
 
                 if mask_image and input_image:
                     w, h = input_image.size
@@ -576,7 +1255,8 @@ def main():
                                 height=inpaint_h,
                                 width=inpaint_w,
                                 num_inference_steps=num_steps,
-                                generator=generator
+                                generator=generator,
+                                callback_on_step_end=progress_cb
                             )
                         elif pipe_inpaint is not None:
                             out = pipe_inpaint(
@@ -587,7 +1267,8 @@ def main():
                                 width=inpaint_w,
                                 guidance_scale=guidance_scale,
                                 num_inference_steps=num_steps,
-                                generator=generator
+                                generator=generator,
+                                callback_on_step_end=progress_cb
                             )
                         else:
                             raise ValueError("Inpainting pipeline is not initialized or not supported.")
@@ -601,7 +1282,8 @@ def main():
                                 prompt=prompt,
                                 image=ref_imgs,
                                 num_inference_steps=num_steps,
-                                generator=generator
+                                generator=generator,
+                                callback_on_step_end=progress_cb
                             )
                     else:
                         print("Running Flux2KleinPipeline as Text2Img")
@@ -611,7 +1293,8 @@ def main():
                                 num_inference_steps=num_steps,
                                 generator=generator,
                                 height=data.get("img_height", 1024),
-                                width=data.get("img_width", 1024)
+                                width=data.get("img_width", 1024),
+                                callback_on_step_end=progress_cb
                             )
                 else:
                     ref_image = input_image or (guide_images[0] if guide_images else None)
@@ -633,7 +1316,8 @@ def main():
                                 guidance_scale=guidance_scale,
                                 num_inference_steps=num_steps,
                                 generator=generator,
-                                strength=strength
+                                strength=strength,
+                                callback_on_step_end=progress_cb
                             )
                     else:
                         print("Running standard FluxPipeline Text2Img")
@@ -644,7 +1328,8 @@ def main():
                                 num_inference_steps=num_steps,
                                 generator=generator,
                                 height=data.get("img_height", 1024),
-                                width=data.get("img_width", 1024)
+                                width=data.get("img_width", 1024),
+                                callback_on_step_end=progress_cb
                             )
 
                 img = out.images[0]
@@ -682,6 +1367,8 @@ def main():
                         torch.mps.empty_cache()
 
         except Exception as e:
+            print(f"sdbk errr {str(e)}")
+            sys.stdout.flush()
             print(f"Exception during message handling: {e}")
             traceback.print_exc()
         finally:

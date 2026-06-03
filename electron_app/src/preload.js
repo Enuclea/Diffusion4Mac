@@ -53,3 +53,20 @@ ipcRenderer.on("to_download", (e, data) => { // the msg channel which is used fo
     bind_ipc_download_on_fns[data.download_id][data.fn](data.msg)
 });
 
+// Direct progress channel - bypasses py_vue_bridge -> StableDiffusion.state_msg chain
+var download_progress_callback = undefined;
+
+function bind_download_progress(fn) {
+    download_progress_callback = fn;
+}
+
+contextBridge.exposeInMainWorld('bind_download_progress', bind_download_progress)
+
+ipcRenderer.on("download_progress", (e, pct) => {
+    console.log("[PRELOAD] download_progress received:", pct);
+    if (download_progress_callback) {
+        download_progress_callback(pct);
+    }
+});
+
+

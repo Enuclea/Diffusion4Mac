@@ -9,3 +9,5 @@ requests
 pyinstaller 
 opencv-python
 safetensors
+protobuf
+sentencepiece

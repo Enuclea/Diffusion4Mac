@@ -63,28 +63,36 @@
                     </div>
 
                     <div class="lora_action_area">
-                        <!-- If downloaded, show toggle switch -->
-                        <div v-if="is_downloaded(lora.id)" class="toggle_container">
-                            <span class="status_label" :class="{ active: is_enabled(lora.id) }">
-                                {{ is_enabled(lora.id) ? 'Active' : 'Inactive' }}
-                            </span>
-                            <label class="switch">
-                                <input type="checkbox" :checked="is_enabled(lora.id)" @change="toggleLora(lora.id, 'flux_klein')">
-                                <span class="toggle round"></span>
-                            </label>
+                        <!-- If incompatible with active model size -->
+                        <div v-if="lora.incompatible" style="background: rgba(233, 64, 87, 0.1); border: 1px solid rgba(233, 64, 87, 0.2); padding: 8px 12px; border-radius: 8px; font-size: 0.8rem; color: #ff6b8b; margin-top: 8px; display: flex; align-items: center; gap: 6px; box-sizing: border-box; width: 100%;">
+                            <span>⚠️ {{ lora.incompatible_reason }}</span>
                         </div>
-                        
-                        <!-- If active, show weight/strength slider -->
-                        <div v-if="is_downloaded(lora.id) && is_enabled(lora.id)" class="slider_container" style="margin-top: 8px;">
-                            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; opacity: 0.9; margin-bottom: 2px;">
-                                <span>Strength:</span>
-                                <span style="font-weight: bold; color: #3E7BFA;">{{ get_strength(lora.id) }}</span>
+
+                        <!-- Otherwise show normal actions -->
+                        <template v-else>
+                            <!-- If downloaded, show toggle switch -->
+                            <div v-if="is_downloaded(lora.id)" class="toggle_container">
+                                <span class="status_label" :class="{ active: is_enabled(lora.id) }">
+                                    {{ is_enabled(lora.id) ? 'Active' : 'Inactive' }}
+                                </span>
+                                <label class="switch">
+                                    <input type="checkbox" :checked="is_enabled(lora.id)" @change="toggleLora(lora.id, 'flux_klein')">
+                                    <span class="toggle round"></span>
+                                </label>
                             </div>
-                            <input type="range" :min="lora.min_weight !== undefined ? lora.min_weight : -2.0" :max="lora.max_weight !== undefined ? lora.max_weight : 2.0" step="0.1" :value="get_strength(lora.id)" @input="update_strength(lora.id, $event.target.value)" style="width: 100%; height: 4px; border-radius: 2px; outline: none; background: #555; accent-color: #3E7BFA; cursor: pointer;">
-                        </div>
-                        
-                        <!-- If not downloaded, show download button -->
-                        <DownloadButton v-else :app="app" :asset_details="lora"></DownloadButton>
+                            
+                            <!-- If active, show weight/strength slider -->
+                            <div v-if="is_downloaded(lora.id) && is_enabled(lora.id)" class="slider_container" style="margin-top: 8px;">
+                                <div style="display: flex; justify-content: space-between; font-size: 0.75rem; opacity: 0.9; margin-bottom: 2px;">
+                                    <span>Strength:</span>
+                                    <span style="font-weight: bold; color: #3E7BFA;">{{ get_strength(lora.id) }}</span>
+                                </div>
+                                <input type="range" :min="lora.min_weight !== undefined ? lora.min_weight : -2.0" :max="lora.max_weight !== undefined ? lora.max_weight : 2.0" step="0.1" :value="get_strength(lora.id)" @input="update_strength(lora.id, $event.target.value)" style="width: 100%; height: 4px; border-radius: 2px; outline: none; background: #555; accent-color: #3E7BFA; cursor: pointer;">
+                            </div>
+                            
+                            <!-- If not downloaded, show download button -->
+                            <DownloadButton v-else :app="app" :asset_details="lora"></DownloadButton>
+                        </template>
 
                         <!-- If custom, show remove option -->
                         <div v-if="lora.is_custom" style="margin-top: 8px; text-align: right;">
@@ -274,9 +282,44 @@ const LoraStore = {
         },
         active_klein_loras() {
             if (!this.app.is_mounted || !this.app.app_state.app_data.settings) return this.klein_loras;
+            const is_4b = this.app.app_state.app_data.settings.flux_klein_size === '4B';
+            const mapped = this.klein_loras.map(lora => {
+                let copy = JSON.parse(JSON.stringify(lora));
+                if (is_4b) {
+                    if (copy.id === 'flux_klein_detailed') {
+                        copy.id = 'flux_klein_detailed_4b';
+                        copy.filename = 'f2k_4B_consist_20260314.safetensors';
+                        copy.url = 'https://huggingface.co/lrzjason/Consistance_Edit_Lora/resolve/main/f2k_4B_consist_20260314.safetensors';
+                        copy.md5 = 'flux_klein_detailed_4b_dummy';
+                        copy.title = 'Detailed Enhancer (4B)';
+                        copy.description = 'Enhances structure and consistency specifically for the 4B model.';
+                        copy.default_weight = 0.65;
+                    } else if (copy.id === 'flux_klein_cinematic') {
+                        // Map to 4B-compatible adapter with cinematic-tuned weight
+                        copy.id = 'flux_klein_cinematic_4b';
+                        copy.filename = 'f2k_4B_consist_20260314.safetensors';
+                        copy.url = 'https://huggingface.co/lrzjason/Consistance_Edit_Lora/resolve/main/f2k_4B_consist_20260314.safetensors';
+                        copy.md5 = 'flux_klein_cinematic_4b_dummy';
+                        copy.title = 'Cinematic Film (4B)';
+                        copy.description = 'Adds dramatic tones and stylized cinematic color grading on 4B. Use keyword for best effect.';
+                        copy.default_weight = 0.45;
+                        copy.keyword = 'Cinematic, Film Still';
+                    } else if (copy.id === 'flux_klein_portrait') {
+                        // Map to 4B-compatible adapter with portrait-tuned weight
+                        copy.id = 'flux_klein_portrait_4b';
+                        copy.filename = 'f2k_4B_consist_20260314.safetensors';
+                        copy.url = 'https://huggingface.co/lrzjason/Consistance_Edit_Lora/resolve/main/f2k_4B_consist_20260314.safetensors';
+                        copy.md5 = 'flux_klein_portrait_4b_dummy';
+                        copy.title = 'Portrait Engine (4B)';
+                        copy.description = 'Enhances facial structures and realistic skin textures on 4B.';
+                        copy.default_weight = 0.55;
+                    }
+                }
+                return copy;
+            });
             const custom = (this.app.app_state.app_data.settings.custom_loras || [])
                 .filter(x => x.family === 'flux_klein');
-            return [...this.klein_loras, ...custom];
+            return [...mapped, ...custom];
         }
     },
     methods: {
@@ -285,11 +328,11 @@ const LoraStore = {
             if (lora_id.startsWith("custom_")) {
                 return true;
             }
-            let asset = this.app.assets_manager.downloaded_assets[lora_id];
+            let asset = this.app.app_state.downloaded_assets[lora_id];
             if (asset && asset.status === 'done') {
                 return true;
             }
-            let downloadingAsset = this.app.assets_manager.downloading[lora_id];
+            let downloadingAsset = this.app.app_state.downloading[lora_id];
             if (downloadingAsset && downloadingAsset.status === 'done') {
                 return true;
             }
@@ -335,7 +378,7 @@ const LoraStore = {
             }
         },
         find_lora_def(lora_id) {
-            let all = [...this.schnell_loras, ...this.klein_loras];
+            let all = [...this.active_schnell_loras, ...this.active_klein_loras];
             return all.find(l => l.id === lora_id) || null;
         },
         get_strength(lora_id) {

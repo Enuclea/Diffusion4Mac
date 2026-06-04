@@ -38,7 +38,7 @@ module.exports = {
                 appId: 'com.diffusion4mac.diffusion4mac',
                 artifactName: "Diffusion4Mac"+(build_config.build_name||"")+"-${version}.${ext}",
 
-                afterSign: "./afterSignHook.js",
+                // afterSign: "./afterSignHook.js",
                 "extraResources": [{
                     "from": process.env.BACKEND_BUILD_PATH , 
                     "to": "core",

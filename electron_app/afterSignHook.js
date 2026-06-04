@@ -42,6 +42,7 @@ module.exports = async function (context) {
 
   try {
     await notarize({
+      tool: 'notarytool',
       appBundleId: 'com.diffusion4mac.diffusion4mac',
       appPath: appPath,
       appleId: appleId,

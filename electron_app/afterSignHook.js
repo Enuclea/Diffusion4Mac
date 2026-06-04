@@ -24,7 +24,18 @@ module.exports = async function (context) {
         if (line.includes('=') && !line.trim().startsWith('#')) {
           const parts = line.split('=');
           const key = parts[0].trim();
-          const val = parts.slice(1).join('=').trim();
+          let val = parts.slice(1).join('=').trim();
+          
+          // Remove inline comments
+          if (val.includes('#')) {
+            val = val.substring(0, val.indexOf('#')).trim();
+          }
+          
+          // Strip surrounding quotes
+          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+            val = val.substring(1, val.length - 1).trim();
+          }
+
           if (key === 'APPLE_ID') appleId = val;
           if (key === 'APPLE_ID_PASSWORD') appleIdPassword = val;
           if (key === 'APPLE_TEAM_ID') teamId = val;

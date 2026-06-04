@@ -7,6 +7,12 @@ set -e
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 cd "$DIR"
 
+# Prioritize local native Node.js if available
+if [ -d "$DIR/node-native/bin" ]; then
+    echo "Prioritizing local native Node.js in node-native/bin..."
+    export PATH="$DIR/node-native/bin:$PATH"
+fi
+
 echo "============================================="
 echo "   Diffusion4Mac - Developer Launch Script   "
 echo "============================================="

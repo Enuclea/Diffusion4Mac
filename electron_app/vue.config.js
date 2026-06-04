@@ -1,8 +1,22 @@
+const { execSync } = require('child_process');
+
 try {
     var build_config = require('./build_config.json');
     console.log(build_config + "\n\n\n\n\n")
 } catch (err) {
     var build_config = {}
+}
+
+let defaultArch = process.arch;
+if (process.platform === 'darwin') {
+    try {
+        const isAppleSilicon = execSync('sysctl -n hw.optional.arm64 2>/dev/null').toString().trim() === '1';
+        if (isAppleSilicon) {
+            defaultArch = 'arm64';
+        }
+    } catch (e) {
+        // Fallback to process.arch
+    }
 }
 
 
@@ -46,7 +60,7 @@ module.exports = {
                     "target": {
                         "target": "dmg",
                         "arch": [
-                            process.env.BUILD_ARCH || process.arch  //'arm64' , 'x64'
+                            process.env.BUILD_ARCH || defaultArch  //'arm64' , 'x64'
                         ]
                     }
                 },

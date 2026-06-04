@@ -1,7 +1,7 @@
 {
   "name": "diffusion4mac",
-  "version": "2.6.3-beta",
-  "build_number": "0031",
+  "version": "2.7.0-beta",
+  "build_number": "0032",
   "website": "https://github.com/enuclea/Diffusion4Mac",
   "description": "Diffusion4Mac - Stable Diffusion App.",
   "is_dev": false,

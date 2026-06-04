@@ -24,7 +24,7 @@ By default, Diffusion4Mac hosts and mirrors its core assets on a custom high-spe
 * **FLUX.2 [klein] (9B)** (High-fidelity local model)
 
 ## Requirements
-* Mac with Apple Silicon (M1/M2/M3/M4/M5) or Intel CPU
+* Mac with Apple Silicon (M1/M2/M3/M4/M5) or Intel CPU. (Note: Starting with v2.7.0-beta, macOS builds are compiled natively for Apple Silicon `arm64` by default for maximum performance and to avoid Rosetta translation warnings).
 * macOS 12.3 or later
 
 ## License & Attribution

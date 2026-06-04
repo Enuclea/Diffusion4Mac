@@ -199,5 +199,6 @@ backends/ollama/
 .wrangler/
 dist_backend/
 scratch/
+node-native/
 
 

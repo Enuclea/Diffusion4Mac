@@ -232,6 +232,23 @@
                     </label>
                 </div>
             </div>
+
+            <!-- Card 12: FP8 (8-bit) Quantization -->
+            <div class="setting_card">
+                <div class="card_hero hero_blue">
+                    <span class="hero_icon">⚖️</span>
+                </div>
+                <div class="card_body">
+                    <h3>FP8 (8-bit) Quantization</h3>
+                    <p>Loads Flux model weights in FP8 format. Drastically reduces memory footprint by up to 10GB, allowing large models to run smoothly on lower-RAM Macs.</p>
+                </div>
+                <div class="card_footer">
+                    <label class="switch">
+                        <input type="checkbox" v-model="app.app_state.app_data.settings.flux_fp8">
+                        <span class="toggle round"></span>
+                    </label>
+                </div>
+            </div>
         </div>
     </div>
 </template>
@@ -264,14 +281,16 @@ const Settings = {
                 settings.flux_sequential_cpu_offload === (ram <= 8.5) &&
                 settings.flux_vae_slicing === true &&
                 settings.flux_vae_tiling === false &&
-                settings.flux_attention_slicing === (ram <= 8.5);
+                settings.flux_attention_slicing === (ram <= 8.5) &&
+                settings.flux_fp8 === (ram <= 16.5);
 
             const quality_match = 
                 settings.flux_klein_size === '9B' &&
                 settings.flux_sequential_cpu_offload === (ram <= 16.5) &&
                 settings.flux_vae_slicing === true &&
                 settings.flux_vae_tiling === (ram <= 8.5) &&
-                settings.flux_attention_slicing === (ram <= 16.5);
+                settings.flux_attention_slicing === (ram <= 16.5) &&
+                settings.flux_fp8 === (ram <= 16.5);
 
             if (speed_match) return 'Speed-Optimized';
             if (quality_match) return 'Quality-Optimized';
@@ -305,6 +324,7 @@ const Settings = {
             settings.flux_vae_slicing = true;
             settings.flux_vae_tiling = false;
             settings.flux_attention_slicing = ram <= 8.5;
+            settings.flux_fp8 = ram <= 16.5;
 
             this.app.show_toast("Optimized for Speed! ⚡");
         },
@@ -318,6 +338,7 @@ const Settings = {
             settings.flux_vae_slicing = true;
             settings.flux_vae_tiling = ram <= 8.5;
             settings.flux_attention_slicing = ram <= 16.5;
+            settings.flux_fp8 = ram <= 16.5;
 
             this.app.show_toast("Optimized for Quality! ✨");
         }

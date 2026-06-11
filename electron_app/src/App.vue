@@ -167,6 +167,9 @@ export default
         if(data.settings.flux_sequential_cpu_offload == undefined)
             data.settings.flux_sequential_cpu_offload = true
 
+        if(data.settings.flux_fp8 == undefined)
+            data.settings.flux_fp8 = false
+
         if(!data.custom_models){
             data.custom_models = {}
         }

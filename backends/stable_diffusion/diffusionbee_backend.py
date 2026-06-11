@@ -57,10 +57,68 @@ def new_is_autocast_enabled(device_type="cuda"):
         return False
 torch.is_autocast_enabled = new_is_autocast_enabled
 
-torch.__version__ = "2.4.0"
+try:
+    from torch.torch_version import TorchVersion
+    torch.__version__ = TorchVersion("2.4.0")
+except ImportError:
+    torch.__version__ = "2.4.0"
 torch.uint16 = torch.int16
 torch.uint32 = torch.int32
 torch.uint64 = torch.int64
+
+# Monkeypatch torch.Tensor.to to convert float8 to float16 when moving to MPS
+orig_to = torch.Tensor.to
+def patched_to(self, *args, **kwargs):
+    device = None
+    try:
+        if args and args[0] is not None:
+            if isinstance(args[0], (str, torch.device)):
+                device = torch.device(args[0])
+        if "device" in kwargs and kwargs["device"] is not None:
+            device = torch.device(kwargs["device"])
+    except Exception:
+        pass
+        
+    if device is not None and device.type == "mps":
+        float8_dtypes = []
+        if hasattr(torch, "float8_e4m3fn"):
+            float8_dtypes.append(torch.float8_e4m3fn)
+        if hasattr(torch, "float8_e5m2"):
+            float8_dtypes.append(torch.float8_e5m2)
+            
+        if self.dtype in float8_dtypes:
+            # Convert float8 to float16 on CPU first, then transfer to MPS
+            cpu_fp16 = orig_to(self, device="cpu", dtype=torch.float16)
+            return orig_to(cpu_fp16, *args, **kwargs)
+torch.Tensor.to = patched_to
+
+# Monkeypatch torch.nn.functional.linear to align input/bias dtypes to weight.dtype on MPS, avoiding device mismatch crashes
+import torch.nn.functional as F
+orig_linear = F.linear
+def patched_linear(input, weight, bias=None):
+    if input.device.type == "mps" or weight.device.type == "mps":
+        target_dtype = torch.float16
+        float8_dtypes = []
+        if hasattr(torch, "float8_e4m3fn"):
+            float8_dtypes.append(torch.float8_e4m3fn)
+        if hasattr(torch, "float8_e5m2"):
+            float8_dtypes.append(torch.float8_e5m2)
+            
+        if input.dtype in float8_dtypes:
+            input = input.to(target_dtype)
+        if weight.dtype in float8_dtypes:
+            weight = weight.to(target_dtype)
+        if bias is not None and bias.dtype in float8_dtypes:
+            bias = bias.to(target_dtype)
+            
+        # Match input and bias dtypes to weight.dtype to avoid MPS NDArray datatype mismatch crash
+        if input.dtype != weight.dtype:
+            input = input.to(weight.dtype)
+        if bias is not None and bias.dtype != weight.dtype:
+            bias = bias.to(weight.dtype)
+    return orig_linear(input, weight, bias)
+F.linear = patched_linear
+
 
 if not hasattr(torch, "xpu"):
     class DummyXPUMetaclass(type):
@@ -212,7 +270,7 @@ os.environ["TRANSFORMERS_NO_TF"] = "1"
 import random
 import traceback
 from pathlib import Path
-from PIL import Image
+from PIL import Image, ImageOps
 import torch
 from diffusers import FluxPipeline, FluxImg2ImgPipeline, FluxInpaintPipeline
 
@@ -427,12 +485,25 @@ def patch_vae_for_mps(pipeline):
             return orig_encode(x, *args, **kwargs)
         pipeline.vae.encode = patched_encode
 
+def flush_mps_cache():
+    import gc
+    gc.collect()
+    if hasattr(torch, "mps") and hasattr(torch.mps, "empty_cache"):
+        try:
+            torch.mps.empty_cache()
+        except Exception: pass
+    if hasattr(torch, "mps") and hasattr(torch.mps, "synchronize"):
+        try:
+            torch.mps.synchronize()
+        except Exception: pass
+
 def main():
     home_path = os.path.expanduser("~")
     print("sdbk mdld") # notify UI model logic is ready to load/run
 
     current_model = None
     current_sequential_offload = None
+    current_fp8 = None
     pipe = None
     pipe_img2img = None
     pipe_kv = None
@@ -907,6 +978,7 @@ def main():
             flux_attention_slicing = data.get("flux_attention_slicing", False)
             flux_sequential_cpu_offload = data.get("flux_sequential_cpu_offload", False)
             flux_klein_size = data.get("flux_klein_size", "9B")
+            flux_fp8 = data.get("flux_fp8", False)
             
             # Retrieve LoRA parameters from root data (injected via LoraStore) or fallback to raw_form_options (advanced UI field)
             lora_path = data.get("lora_path", None) or raw_form_options.get("lora_path", None)
@@ -964,7 +1036,8 @@ def main():
                     guide_image_paths.append((key, path_val))
                     img = load_image(path_val)
                     if img:
-                        img = resize_image_aspect(img, max_dim)
+                        resample_filter = getattr(Image, "Resampling", Image).LANCZOS
+                        img = ImageOps.fit(img, (target_width, target_height), method=resample_filter)
                         guide_images.append(img)
 
             # Handle parsed options
@@ -992,11 +1065,9 @@ def main():
                         model_id = "black-forest-labs/FLUX.2-klein-9B"
 
             device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
-            dtype = torch.float16 if device == "mps" else torch.bfloat16
-
-            # Setup pipeline if model changed, sequential offload state changed, or uninitialized
-            if current_model != model_id or current_sequential_offload != flux_sequential_cpu_offload:
-                print(f"sdbk mdld Loading model weights (model_id={model_id}, sequential_offload={flux_sequential_cpu_offload})...")
+            dtype = torch.float16 if device == "mps" else torch.bfloat16            # Setup pipeline if model changed, sequential offload state changed, FP8 state changed, or uninitialized
+            if current_model != model_id or current_sequential_offload != flux_sequential_cpu_offload or current_fp8 != flux_fp8:
+                print(f"sdbk mdld Loading model weights (model_id={model_id}, sequential_offload={flux_sequential_cpu_offload}, FP8={flux_fp8})...")
                 
                 if pipe is not None:
                     del pipe
@@ -1005,11 +1076,33 @@ def main():
                 if pipe_kv is not None:
                     del pipe_kv
                 pipe_inpaint = None
-                torch.cuda.empty_cache() if torch.cuda.is_available() else None
+                flush_mps_cache()
 
                 if model_selection == "Flux Klein" and "Flux2KleinPipeline" in globals():
                     # use standard pipeline for klein multi-image editing or standard text2img
-                    pipe = Flux2KleinPipeline.from_pretrained(model_id, torch_dtype=dtype, token=hf_token, low_cpu_mem_usage=False)
+                    if flux_fp8:
+                        from diffusers.models import Flux2Transformer2DModel
+                        print("sdbk info Loading Klein Transformer in float8_e4m3fn...")
+                        try:
+                            transformer = Flux2Transformer2DModel.from_pretrained(
+                                model_id,
+                                subfolder="transformer",
+                                torch_dtype=torch.float8_e4m3fn,
+                                token=hf_token
+                            )
+                            pipe = Flux2KleinPipeline.from_pretrained(
+                                model_id,
+                                transformer=transformer,
+                                torch_dtype=dtype,
+                                token=hf_token,
+                                low_cpu_mem_usage=False
+                            )
+                        except Exception as e:
+                            print(f"sdbk warn Failed to load float8 transformer: {e}. Falling back to default dtype...")
+                            pipe = Flux2KleinPipeline.from_pretrained(model_id, torch_dtype=dtype, token=hf_token, low_cpu_mem_usage=False)
+                    else:
+                        pipe = Flux2KleinPipeline.from_pretrained(model_id, torch_dtype=dtype, token=hf_token, low_cpu_mem_usage=False)
+
                     if device == "mps":
                         patch_vae_for_mps(pipe)
                     import psutil
@@ -1039,7 +1132,28 @@ def main():
                             patch_vae_for_mps(pipe_inpaint)
                 else:
                     # Schnell or standard Klein
-                    pipe = FluxPipeline.from_pretrained(model_id, torch_dtype=dtype, token=hf_token)
+                    if flux_fp8:
+                        from diffusers import FluxTransformer2DModel
+                        print("sdbk info Loading Flux Transformer in float8_e4m3fn...")
+                        try:
+                            transformer = FluxTransformer2DModel.from_pretrained(
+                                model_id,
+                                subfolder="transformer",
+                                torch_dtype=torch.float8_e4m3fn,
+                                token=hf_token
+                            )
+                            pipe = FluxPipeline.from_pretrained(
+                                model_id,
+                                transformer=transformer,
+                                torch_dtype=dtype,
+                                token=hf_token
+                            )
+                        except Exception as e:
+                            print(f"sdbk warn Failed to load float8 transformer: {e}. Falling back to default dtype...")
+                            pipe = FluxPipeline.from_pretrained(model_id, torch_dtype=dtype, token=hf_token)
+                    else:
+                        pipe = FluxPipeline.from_pretrained(model_id, torch_dtype=dtype, token=hf_token)
+
                     if device == "mps":
                         patch_vae_for_mps(pipe)
                     import psutil
@@ -1052,7 +1166,7 @@ def main():
                         except Exception as e:
                             print(f"sdbk warn Sequential CPU offload failed: {e}")
                             if hasattr(pipe, "enable_model_cpu_offload"):
-                                pipe.enable_model_cpu_offload(device=device)
+                                 pipe.enable_model_cpu_offload(device=device)
                             else:
                                 pipe.to(device)
                     elif hasattr(pipe, "enable_model_cpu_offload"):
@@ -1073,6 +1187,8 @@ def main():
 
                 current_model = model_id
                 current_sequential_offload = flux_sequential_cpu_offload
+                current_fp8 = flux_fp8
+                flush_mps_cache()
 
             # Handle LoRA weights loading/unloading
             def apply_loras(pipeline, paths, weights):
@@ -1156,7 +1272,8 @@ def main():
             # Load input image and mask image first to determine the active pipeline
             input_image = load_image(input_image_path)
             if input_image:
-                input_image = resize_image_aspect(input_image, max_dim)
+                resample_filter = getattr(Image, "Resampling", Image).LANCZOS
+                input_image = ImageOps.fit(input_image, (target_width, target_height), method=resample_filter)
 
             mask_image_path = data.get("mask_image_path", None)
             mask_image = load_image(mask_image_path) if mask_image_path else None
@@ -1218,13 +1335,7 @@ def main():
             apply_loras(active_pipe, lora_paths, lora_weights)
 
             # Aggressive memory cleanup before generation to prevent MPS OOM
-            import gc
-            gc.collect()
-            if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-                if hasattr(torch.mps, 'empty_cache'):
-                    torch.mps.empty_cache()
-                if hasattr(torch.mps, 'synchronize'):
-                    torch.mps.synchronize()
+            flush_mps_cache()
 
             generator = torch.Generator(device=device).manual_seed(seed)
 
@@ -1358,13 +1469,7 @@ def main():
                 # Clean up memory after each image in the batch
                 out = None
                 img = None
-                import gc
-                gc.collect()
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-                    if hasattr(torch.mps, 'empty_cache'):
-                        torch.mps.empty_cache()
+                flush_mps_cache()
 
         except Exception as e:
             print(f"sdbk errr {str(e)}")
@@ -1379,13 +1484,7 @@ def main():
             ref_image = None
             guide_images = None
             ref_imgs = None
-            import gc
-            gc.collect()
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-                if hasattr(torch.mps, 'empty_cache'):
-                    torch.mps.empty_cache()
+            flush_mps_cache()
 
 if __name__ == "__main__":
     import multiprocessing

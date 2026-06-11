@@ -436,6 +436,7 @@ export default {
                 params.flux_vae_tiling = !!settings.flux_vae_tiling;
                 params.flux_attention_slicing = !!settings.flux_attention_slicing;
                 params.flux_sequential_cpu_offload = !!settings.flux_sequential_cpu_offload;
+                params.flux_fp8 = !!settings.flux_fp8;
             }
 
             this.is_input_avail = false;
@@ -488,6 +489,7 @@ export default {
                 prompt_params.flux_vae_tiling = !!settings.flux_vae_tiling;
                 prompt_params.flux_attention_slicing = !!settings.flux_attention_slicing;
                 prompt_params.flux_sequential_cpu_offload = !!settings.flux_sequential_cpu_offload;
+                prompt_params.flux_fp8 = !!settings.flux_fp8;
             }
 
             this.is_input_avail = false;

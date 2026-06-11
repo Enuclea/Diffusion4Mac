@@ -90,6 +90,7 @@ def patched_to(self, *args, **kwargs):
             # Convert float8 to float16 on CPU first, then transfer to MPS
             cpu_fp16 = orig_to(self, device="cpu", dtype=torch.float16)
             return orig_to(cpu_fp16, *args, **kwargs)
+    return orig_to(self, *args, **kwargs)
 torch.Tensor.to = patched_to
 
 # Monkeypatch torch.nn.functional.linear to align input/bias dtypes to weight.dtype on MPS, avoiding device mismatch crashes
@@ -1394,6 +1395,8 @@ def main():
                                 image=ref_imgs,
                                 num_inference_steps=num_steps,
                                 generator=generator,
+                                height=data.get("img_height", 1024),
+                                width=data.get("img_width", 1024),
                                 callback_on_step_end=progress_cb
                             )
                     else:

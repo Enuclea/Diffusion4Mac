@@ -49,6 +49,26 @@ try:
 except Exception:
     pass
 
+# Monkeypatch create_causal_mask to handle inputs_embeds and missing cache_position
+try:
+    import transformers.masking_utils
+    orig_create_causal_mask = transformers.masking_utils.create_causal_mask
+    def patched_create_causal_mask(*args, **kwargs):
+        if "inputs_embeds" in kwargs:
+            kwargs["input_embeds"] = kwargs.pop("inputs_embeds")
+        input_embeds = kwargs.get("input_embeds", None)
+        if input_embeds is None and len(args) > 1:
+            input_embeds = args[1]
+        has_cache_position = "cache_position" in kwargs or len(args) > 3
+        if not has_cache_position and input_embeds is not None:
+            import torch
+            query_length = input_embeds.shape[1]
+            kwargs["cache_position"] = torch.arange(query_length, device=input_embeds.device)
+        return orig_create_causal_mask(*args, **kwargs)
+    transformers.masking_utils.create_causal_mask = patched_create_causal_mask
+except Exception:
+    pass
+
 # Apply PyTorch 2.4 compatibility monkeypatch for macOS x86_64 PyTorch 2.2.2
 import importlib.metadata
 orig_metadata_version = importlib.metadata.version

@@ -2,6 +2,14 @@ import sys
 sys.modules['tensorflow'] = None
 sys.modules['keras'] = None
 
+# Monkeypatch bitsandbytes quantizer environment validation check for Apple Silicon / MPS compatibility
+try:
+    from diffusers.quantizers.bitsandbytes.bnb_quantizer import BnB4BitDiffusersQuantizer, BnB8BitDiffusersQuantizer
+    BnB4BitDiffusersQuantizer.validate_environment = lambda *args, **kwargs: None
+    BnB8BitDiffusersQuantizer.validate_environment = lambda *args, **kwargs: None
+except ImportError:
+    pass
+
 # Apply PyTorch 2.4 compatibility monkeypatch for macOS x86_64 PyTorch 2.2.2
 import importlib.metadata
 orig_metadata_version = importlib.metadata.version

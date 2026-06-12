@@ -2,12 +2,51 @@ import sys
 sys.modules['tensorflow'] = None
 sys.modules['keras'] = None
 
-# Monkeypatch bitsandbytes quantizer environment validation check for Apple Silicon / MPS compatibility
+# Monkeypatch bitsandbytes quantizer environment validation check and device map for Apple Silicon / MPS compatibility
 try:
     from diffusers.quantizers.bitsandbytes.bnb_quantizer import BnB4BitDiffusersQuantizer, BnB8BitDiffusersQuantizer
     BnB4BitDiffusersQuantizer.validate_environment = lambda *args, **kwargs: None
     BnB8BitDiffusersQuantizer.validate_environment = lambda *args, **kwargs: None
+    BnB4BitDiffusersQuantizer.update_device_map = lambda self, device_map: {"": "cpu"} if device_map is None else device_map
+    BnB8BitDiffusersQuantizer.update_device_map = lambda self, device_map: {"": "cpu"} if device_map is None else device_map
 except ImportError:
+    pass
+
+# Monkeypatch Qwen2Tokenizer to Qwen2TokenizerFast to allow loading from tokenizer.json only
+try:
+    import transformers
+    import transformers.models.qwen2.tokenization_qwen2
+    import transformers.models.qwen2
+    transformers.models.qwen2.tokenization_qwen2.Qwen2Tokenizer = transformers.Qwen2TokenizerFast
+    transformers.models.qwen2.Qwen2Tokenizer = transformers.Qwen2TokenizerFast
+    transformers.Qwen2Tokenizer = transformers.Qwen2TokenizerFast
+except ImportError:
+    pass
+
+# Monkeypatch Qwen3VLTextRotaryEmbedding to handle missing rope_scaling config
+try:
+    import transformers.models.qwen3_vl.modeling_qwen3_vl as qwen3_module
+    orig_qwen3_init = qwen3_module.Qwen3VLTextRotaryEmbedding.__init__
+    def patched_qwen3_init(self, *args, **kwargs):
+        config = kwargs.get("config", args[0] if args else None)
+        if config is not None:
+            if getattr(config, "rope_scaling", None) is None:
+                config.rope_scaling = {}
+        return orig_qwen3_init(self, *args, **kwargs)
+    qwen3_module.Qwen3VLTextRotaryEmbedding.__init__ = patched_qwen3_init
+except Exception:
+    pass
+
+# Monkeypatch PreTrainedTokenizerBase._set_model_specific_special_tokens to handle list types safely
+try:
+    from transformers.tokenization_utils_base import PreTrainedTokenizerBase
+    orig_set_tokens = PreTrainedTokenizerBase._set_model_specific_special_tokens
+    def patched_set_tokens(self, special_tokens):
+        if not isinstance(special_tokens, dict):
+            special_tokens = {}
+        return orig_set_tokens(self, special_tokens)
+    PreTrainedTokenizerBase._set_model_specific_special_tokens = patched_set_tokens
+except Exception:
     pass
 
 # Apply PyTorch 2.4 compatibility monkeypatch for macOS x86_64 PyTorch 2.2.2

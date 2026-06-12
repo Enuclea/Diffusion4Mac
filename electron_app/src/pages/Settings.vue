@@ -145,6 +145,25 @@
                 </div>
             </div>
 
+            <!-- Card 6b: Ideogram API Key -->
+            <div class="setting_card">
+                <div class="card_hero hero_red">
+                    <span class="hero_icon">🔑</span>
+                </div>
+                <div class="card_body">
+                    <h3>Ideogram API Key</h3>
+                    <p>Enter your Ideogram API Key to enable Ideogram Studio cloud generation (Ideogram 4.0).</p>
+                </div>
+                <div class="card_footer">
+                    <input 
+                        type="password" 
+                        v-model="app.app_state.app_data.settings.ideogram_api_key" 
+                        placeholder="API Key..." 
+                        class="form_input" 
+                    />
+                </div>
+            </div>
+
             <!-- Card 7: Preferred FLUX.2 [klein] Size -->
             <div class="setting_card">
                 <div class="card_hero hero_blue">

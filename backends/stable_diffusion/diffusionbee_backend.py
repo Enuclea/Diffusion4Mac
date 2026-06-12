@@ -1075,18 +1075,23 @@ def main():
                     model_key = "flux_klein_4b"
                 else:
                     model_key = "flux_klein"
+            elif model_selection == "Ideogram Local":
+                model_key = "ideogram_4_nf4"
             
             # Check if local model directory exists
             local_model_dir = os.path.join(str(home_path), ".diffusionbee", "downloaded_assets", "models", model_key)
             if os.path.isdir(local_model_dir):
                 model_id = local_model_dir
             else:
-                model_id = "black-forest-labs/FLUX.1-schnell"
-                if model_selection == "Flux Klein":
+                if model_selection == "Ideogram Local":
+                    model_id = "ideogram-ai/ideogram-4-nf4-diffusers"
+                elif model_selection == "Flux Klein":
                     if flux_klein_size == "4B":
                         model_id = "black-forest-labs/FLUX.2-klein-4B"
                     else:
                         model_id = "black-forest-labs/FLUX.2-klein-9B"
+                else:
+                    model_id = "black-forest-labs/FLUX.1-schnell"
 
             device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
             dtype = torch.float16 if device == "mps" else torch.bfloat16            # Setup pipeline if model changed, sequential offload state changed, FP8 state changed, or uninitialized
@@ -1102,7 +1107,17 @@ def main():
                 pipe_inpaint = None
                 flush_mps_cache()
 
-                if model_selection == "Flux Klein" and "Flux2KleinPipeline" in globals():
+                if model_selection == "Ideogram Local":
+                    from diffusers import Ideogram4Pipeline
+                    print(f"sdbk info Loading Ideogram Local Pipeline (model_id={model_id})...")
+                    pipe = Ideogram4Pipeline.from_pretrained(
+                        model_id,
+                        torch_dtype=dtype,
+                        token=hf_token
+                    )
+                    if device == "mps":
+                        patch_vae_for_mps(pipe)
+                elif model_selection == "Flux Klein" and "Flux2KleinPipeline" in globals():
                     # use standard pipeline for klein multi-image editing or standard text2img
                     if flux_fp8:
                         from diffusers.models import Flux2Transformer2DModel
@@ -1304,7 +1319,9 @@ def main():
 
             # Setup active pipeline reference
             active_pipe = pipe
-            if mask_image and input_image:
+            if model_selection == "Ideogram Local":
+                active_pipe = pipe
+            elif mask_image and input_image:
                 if pipe_inpaint is None:
                     print("Initializing inpainting pipeline from loaded components...")
                     if model_selection == "Flux Klein" and "Flux2KleinInpaintPipeline" in globals():
@@ -1433,6 +1450,18 @@ def main():
                                 width=data.get("img_width", 1024),
                                 callback_on_step_end=progress_cb
                             )
+                elif model_selection == "Ideogram Local":
+                    print("Running Ideogram Local Text2Img")
+                    with torch.inference_mode():
+                        out = pipe(
+                            prompt=prompt,
+                            num_inference_steps=num_steps,
+                            guidance_scale=guidance_scale,
+                            generator=generator,
+                            height=data.get("img_height", 1024),
+                            width=data.get("img_width", 1024),
+                            callback_on_step_end=progress_cb
+                        )
                 else:
                     ref_image = input_image or (guide_images[0] if guide_images else None)
                     if ref_image:

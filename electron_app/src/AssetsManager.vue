@@ -337,6 +337,26 @@ export default {
                 return;
             }
 
+            if (asset_id === 'ideogram_4_nf4') {
+                Vue.set(this.downloading, asset_id, {
+                    id: asset_id,
+                    status: 'downloading',
+                    progress: 0
+                });
+                
+                Vue.set(this.app.app_state, 'global_loader_modal_msg', "Downloading Ideogram 4.0... This may take a while.");
+                Vue.set(this.app.app_state, 'global_loader_percentage', 0);
+                
+                this.app.stable_diffusion.is_input_avail = false;
+                this.app.stable_diffusion.downloading_model_id = asset_id;
+                this.app.stable_diffusion.downloading_asset_ids = [asset_id];
+                send_to_py("dndl " + JSON.stringify({
+                    model: "ideogram-ai/ideogram-4-nf4-diffusers",
+                    hf_token: this.app.app_state.app_data.settings.hf_token || ""
+                }));
+                return;
+            }
+
             if (asset_id === 'flux_schnell') {
                 Vue.set(this.downloading, asset_id, {
                     id: asset_id,

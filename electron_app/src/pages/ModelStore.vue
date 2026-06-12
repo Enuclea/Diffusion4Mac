@@ -69,6 +69,18 @@ const ModelStore ={
             ollama_downloaded_models: [],
             models_list : [
                 {
+                    id: "ideogram_4_nf4",
+                    title: "Ideogram 4.0 (Offline/Local)",
+                    description: "High-fidelity text rendering and composition model with 9.3B parameters, quantized in NF4 for local systems.",
+                    md5: "ideogram_4_nf4_dummy",
+                    filename: "Ideogram-4.0-NF4",
+                    img_url: require("../assets/imgs/page_icon_imgs/default.png"),
+                    model_meta_data: {
+                        sd_type: "Ideogram 4",
+                        float_type: "nf4"
+                    }
+                },
+                {
                     id: "flux_schnell",
                     title: "FLUX.1-schnell",
                     description: "Compact 12B-parameter model optimized for 1-4 step generation speed and high-quality outputs.",
@@ -144,7 +156,7 @@ const ModelStore ={
                 ...(this.app.assets_manager ? this.app.assets_manager.local_assets : {})
             };
             for(let k in all_avail){
-                if (k === 'flux_klein' || k === 'flux_klein_4b' || k === 'flux_schnell') {
+                if (k === 'flux_klein' || k === 'flux_klein_4b' || k === 'flux_schnell' || k === 'ideogram_4_nf4') {
                     let asset = JSON.parse(JSON.stringify(all_avail[k]))
                     let static_details = this.models_list.find(x => x.id === k)
                     if (static_details) {

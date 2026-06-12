@@ -152,6 +152,9 @@ export default
         if(data.settings.gemini_api_key == undefined)
             data.settings.gemini_api_key = ""
 
+        if(data.settings.ideogram_api_key == undefined)
+            data.settings.ideogram_api_key = ""
+
         if(data.settings.flux_klein_size == undefined)
             data.settings.flux_klein_size = "9B"
 

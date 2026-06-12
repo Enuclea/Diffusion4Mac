@@ -33,6 +33,7 @@ import Inpainting from "../pages/Inpainting.vue"
 import PromptDesigner from "../pages/PromptDesigner.vue"
 import LoraStore from "../pages/LoraStore.vue"
 import GeminiStudio from "../pages/GeminiStudio.vue"
+import IdeogramStudio from "../pages/IdeogramStudio.vue"
 
 import History from "../pages/History.vue"
 import Homepage from "../pages/Homepage.vue"
@@ -52,7 +53,7 @@ export default {
     },
     components: {
         Txt2Img, Img2Img , Inpainting , AppletPage , History, Homepage , ModelStore, 
-        Logs, Settings, PostProcessImage, Training, PromptDesigner, LoraStore, GeminiStudio
+        Logs, Settings, PostProcessImage, Training, PromptDesigner, LoraStore, GeminiStudio, IdeogramStudio
     },
     mounted() {
         this.app.functions.switch_page = this.switch_page; 
@@ -61,7 +62,7 @@ export default {
     data() {
 
         let always_on_pages = { Homepage:Homepage  , Txt2Img:Txt2Img , Img2Img:Img2Img , 
-            Inpainting:Inpainting , PostProcessImage:PostProcessImage  , ModelStore:ModelStore , History:History, Logs:Logs, Settings:Settings , Training:Training, PromptDesigner:PromptDesigner, LoraStore:LoraStore, GeminiStudio:GeminiStudio }
+            Inpainting:Inpainting , PostProcessImage:PostProcessImage  , ModelStore:ModelStore , History:History, Logs:Logs, Settings:Settings , Training:Training, PromptDesigner:PromptDesigner, LoraStore:LoraStore, GeminiStudio:GeminiStudio, IdeogramStudio:IdeogramStudio }
 
         let last_opened_timmings = {}
 

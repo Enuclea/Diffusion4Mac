@@ -461,7 +461,7 @@ ipcMain.on('delete_file', (event, fpath, asset_id) => {
     try {
         // 1. Purge by asset_id (for base models and associated caches/temp files)
         if (asset_id) {
-            if (asset_id === 'flux_schnell' || asset_id === 'flux_klein' || asset_id === 'flux_klein_4b') {
+            if (asset_id === 'flux_schnell' || asset_id === 'flux_klein' || asset_id === 'flux_klein_4b' || asset_id === 'ideogram_4_nf4') {
                 let hf_repo_folder = '';
                 if (asset_id === 'flux_schnell') {
                     hf_repo_folder = 'models--black-forest-labs--FLUX.1-schnell';
@@ -469,6 +469,8 @@ ipcMain.on('delete_file', (event, fpath, asset_id) => {
                     hf_repo_folder = 'models--black-forest-labs--FLUX.2-klein-9B';
                 } else if (asset_id === 'flux_klein_4b') {
                     hf_repo_folder = 'models--black-forest-labs--FLUX.2-klein-4B';
+                } else if (asset_id === 'ideogram_4_nf4') {
+                    hf_repo_folder = 'models--ideogram-ai--ideogram-4-nf4-diffusers';
                 }
                 
                 // Hugging Face hub cache path

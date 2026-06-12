@@ -70,6 +70,8 @@ export default {
                         completed_asset_ids = ['flux_klein_4b'];
                     } else if (this.$parent.app_state.downloading['flux_schnell'] && this.$parent.app_state.downloading['flux_schnell'].status === 'downloading') {
                         completed_asset_ids = ['flux_schnell'];
+                    } else if (this.$parent.app_state.downloading['ideogram_4_nf4'] && this.$parent.app_state.downloading['ideogram_4_nf4'].status === 'downloading') {
+                        completed_asset_ids = ['ideogram_4_nf4'];
                     }
                 }
                 
@@ -82,7 +84,7 @@ export default {
                         if (!asset_details.asset_path) {
                             if (asset_details.asset_path_raw) {
                                 asset_details.asset_path = asset_details.asset_path_raw;
-                            } else if (tid === 'flux_klein' || tid === 'flux_klein_4b' || tid === 'flux_schnell') {
+                            } else if (tid === 'flux_klein' || tid === 'flux_klein_4b' || tid === 'flux_schnell' || tid === 'ideogram_4_nf4') {
                                 let dir = window.ipcRenderer.sendSync('get_assets_dir');
                                 let local_path = dir + "/models/" + tid;
                                 let exists = window.ipcRenderer.sendSync('check_path_exists', local_path);
@@ -249,6 +251,8 @@ export default {
                         model_id = "flux_klein_4b";
                     } else if (p.includes("FLUX.1-schnell") || p.includes("flux_schnell")) {
                         model_id = "flux_schnell";
+                    } else if (p.includes("ideogram-4-nf4") || p.includes("ideogram_4_nf4") || p.includes("Ideogram")) {
+                        model_id = "ideogram_4_nf4";
                     }
                     if (model_id) {
                         this.downloading_model_id = model_id;
@@ -269,6 +273,8 @@ export default {
                             model_title = "FLUX.2 [klein] (9B)";
                         } else if (model_id === "flux_klein_4b") {
                             model_title = "FLUX.2 [klein] (4B)";
+                        } else if (model_id === "ideogram_4_nf4") {
+                            model_title = "Ideogram 4.0";
                         }
                         Vue.set(this.$parent.app_state, 'global_loader_modal_msg', "Downloading " + model_title + "... This may take a while.");
                         Vue.set(this.$parent.app_state, 'global_loader_percentage', 0);

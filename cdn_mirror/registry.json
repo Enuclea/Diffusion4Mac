@@ -20,6 +20,13 @@
       "huggingface_repo": "black-forest-labs/FLUX.2-klein-9B",
       "r2_key": "models/FLUX.2-klein-9B",
       "is_repo": true
+    },
+    "ideogram_4_nf4": {
+      "id": "ideogram_4_nf4",
+      "title": "Ideogram 4.0 (Offline/Local)",
+      "huggingface_repo": "ideogram-ai/ideogram-4-nf4-diffusers",
+      "r2_key": "models/ideogram-4-nf4-diffusers",
+      "is_repo": true
     }
   },
   "loras": {

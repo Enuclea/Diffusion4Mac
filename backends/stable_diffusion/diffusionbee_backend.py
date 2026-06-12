@@ -79,17 +79,40 @@ def patched_to(self, *args, **kwargs):
     except Exception:
         pass
         
+    if device is None:
+        try:
+            device = self.device
+        except Exception:
+            pass
+        
+    float8_dtypes = []
+    if hasattr(torch, "float8_e4m3fn"):
+        float8_dtypes.append(torch.float8_e4m3fn)
+    if hasattr(torch, "float8_e5m2"):
+        float8_dtypes.append(torch.float8_e5m2)
+
     if device is not None and device.type == "mps":
-        float8_dtypes = []
-        if hasattr(torch, "float8_e4m3fn"):
-            float8_dtypes.append(torch.float8_e4m3fn)
-        if hasattr(torch, "float8_e5m2"):
-            float8_dtypes.append(torch.float8_e5m2)
+        new_args = list(args)
+        new_kwargs = dict(kwargs)
+        has_float8_target = False
+        
+        if "dtype" in new_kwargs and new_kwargs["dtype"] in float8_dtypes:
+            new_kwargs["dtype"] = torch.float16
+            has_float8_target = True
             
+        for idx, arg in enumerate(new_args):
+            if arg in float8_dtypes:
+                new_args[idx] = torch.float16
+                has_float8_target = True
+                
         if self.dtype in float8_dtypes:
             # Convert float8 to float16 on CPU first, then transfer to MPS
             cpu_fp16 = orig_to(self, device="cpu", dtype=torch.float16)
-            return orig_to(cpu_fp16, *args, **kwargs)
+            return orig_to(cpu_fp16, *new_args, **new_kwargs)
+            
+        if has_float8_target:
+            return orig_to(self, *new_args, **new_kwargs)
+
     return orig_to(self, *args, **kwargs)
 torch.Tensor.to = patched_to
 

@@ -1504,6 +1504,7 @@ def main():
                             prompt=prompt,
                             num_inference_steps=num_steps,
                             guidance_scale=guidance_scale,
+                            guidance_schedule=None,
                             generator=generator,
                             height=data.get("img_height", 1024),
                             width=data.get("img_width", 1024),

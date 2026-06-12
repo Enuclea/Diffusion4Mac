@@ -69,6 +69,42 @@ try:
 except Exception:
     pass
 
+# Monkeypatch diffusers.utils.torch_utils.randn_tensor to always generate on CPU when device is MPS
+try:
+    import diffusers.utils.torch_utils
+    orig_randn_tensor = diffusers.utils.torch_utils.randn_tensor
+    def patched_randn_tensor(shape, generator=None, device=None, dtype=None, layout=None):
+        import torch
+        target_device = device
+        if isinstance(target_device, str):
+            target_device = torch.device(target_device)
+        elif target_device is None:
+            target_device = torch.device("cpu")
+            
+        if target_device.type == "mps":
+            cpu_generator = None
+            if generator is not None:
+                if isinstance(generator, list):
+                    cpu_generator = []
+                    for g in generator:
+                        if g.device.type == "mps":
+                            cg = torch.Generator(device="cpu")
+                            cg.set_state(g.get_state())
+                            cpu_generator.append(cg)
+                        else:
+                            cpu_generator.append(g)
+                elif generator.device.type == "mps":
+                    cpu_generator = torch.Generator(device="cpu")
+                    cpu_generator.set_state(generator.get_state())
+                else:
+                    cpu_generator = generator
+            res = orig_randn_tensor(shape, generator=cpu_generator, device=torch.device("cpu"), dtype=dtype, layout=layout)
+            return res.to(target_device)
+        return orig_randn_tensor(shape, generator=generator, device=device, dtype=dtype, layout=layout)
+    diffusers.utils.torch_utils.randn_tensor = patched_randn_tensor
+except Exception:
+    pass
+
 # Apply PyTorch 2.4 compatibility monkeypatch for macOS x86_64 PyTorch 2.2.2
 import importlib.metadata
 orig_metadata_version = importlib.metadata.version
@@ -1445,7 +1481,7 @@ def main():
             # Aggressive memory cleanup before generation to prevent MPS OOM
             flush_mps_cache()
 
-            generator = torch.Generator(device=device).manual_seed(seed)
+            generator = torch.Generator(device="cpu").manual_seed(seed)
 
             if mask_image and input_image:
                 if mask_image.size != input_image.size:

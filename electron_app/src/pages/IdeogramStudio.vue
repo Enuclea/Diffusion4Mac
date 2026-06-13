@@ -47,6 +47,17 @@
                         ></textarea>
                     </div>
 
+                    <div class="form_group inline_toggle">
+                        <label class="switch_container">
+                            <input type="checkbox" v-model="aiOptimizePrompt" :disabled="loading">
+                            <span class="slider_switch round"></span>
+                        </label>
+                        <div class="toggle_label">
+                            <h4>✨ Optimize prompt with Gemma AI (JSON)</h4>
+                            <p>Converts prompt to JSON to bypass safety filters and maximize text accuracy</p>
+                        </div>
+                    </div>
+
                     <div class="form_group">
                         <label>Magic Prompt Option</label>
                         <select v-model="cloudMagicPrompt" class="form_select" :disabled="loading">
@@ -119,6 +130,17 @@
                             rows="4"
                             :disabled="loading"
                         ></textarea>
+                    </div>
+
+                    <div class="form_group inline_toggle">
+                        <label class="switch_container">
+                            <input type="checkbox" v-model="aiOptimizePrompt" :disabled="loading">
+                            <span class="slider_switch round"></span>
+                        </label>
+                        <div class="toggle_label">
+                            <h4>✨ Optimize prompt with Gemma AI (JSON)</h4>
+                            <p>Converts prompt to JSON to bypass safety filters and maximize text accuracy</p>
+                        </div>
                     </div>
 
                     <div class="form_group">
@@ -234,6 +256,7 @@ const IdeogramStudio = {
         return {
             mode: "cloud", // cloud or local
             prompt: "",
+            aiOptimizePrompt: false,
             cloudMagicPrompt: "AUTO",
             selectedRatio: "1:1",
             localSteps: 48,
@@ -301,6 +324,85 @@ const IdeogramStudio = {
                 this.app.assets_manager.download_asset(asset_details);
             }
         },
+        async optimizePromptWithOllama(rawPrompt) {
+            if (!rawPrompt || !rawPrompt.trim()) return rawPrompt;
+            if (rawPrompt.trim().startsWith('{')) return rawPrompt;
+
+            try {
+                const tagsResponse = await fetch("http://127.0.0.1:11435/api/tags").catch(() => null);
+                if (!tagsResponse) {
+                    this.app.show_toast("Ollama is not running. Using raw prompt.");
+                    return rawPrompt;
+                }
+                const tagsData = await tagsResponse.json();
+                const downloadedModels = tagsData.models ? tagsData.models.map(m => m.name) : [];
+                
+                let preferredModel = "gemma4:e4b";
+                if (this.app && this.app.app_state && this.app.app_state.app_data && this.app.app_state.app_data.settings) {
+                    preferredModel = this.app.app_state.app_data.settings.gemma_preferred_model || "gemma4:e4b";
+                }
+                
+                if (!downloadedModels.includes(preferredModel)) {
+                    const otherModel = preferredModel === "gemma4:e4b" ? "gemma4:e2b" : "gemma4:e4b";
+                    if (downloadedModels.includes(otherModel)) {
+                        preferredModel = otherModel;
+                    } else {
+                        this.app.show_toast("Preferred Gemma model not found. Using raw prompt.");
+                        return rawPrompt;
+                    }
+                }
+                
+                const systemPrompt = `You are a prompt converter that translates normal text-to-image prompts into Ideogram 4.0's native structured JSON caption format.
+You must output ONLY valid JSON, with NO markdown formatting, NO backticks (do not wrap in \`\`\`json), and NO extra text.
+The JSON must follow this exact schema:
+{
+  "high_level_description": "A descriptive overview of the entire scene, keeping it safe and detailed.",
+  "style_description": {
+    "aesthetics": "Visual style keywords (e.g. vibrant, cinematic, photorealistic)",
+    "medium": "The medium (e.g. photograph, digital illustration, 3D render)"
+  }
+}
+Keep the descriptions extremely concise and short. The total output JSON must be under 80 words so it fits within Ideogram's 256 token limit.
+Avoid any sensitive or safety-triggering words (e.g. replace 'woman' with 'female figure' or 'lady', 'dress' with 'gown', 'strokes' with 'textures' to avoid model filters).`;
+
+                const response = await fetch("http://127.0.0.1:11435/api/chat", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: preferredModel,
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: `Convert the following prompt into the required JSON schema: "${rawPrompt}"` }
+                        ],
+                        stream: false
+                    })
+                });
+                
+                if (!response.ok) throw new Error("HTTP error " + response.status);
+                
+                const data = await response.json();
+                if (data.message && data.message.content) {
+                    let content = data.message.content.trim();
+                    if (content.startsWith("```")) {
+                        content = content.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
+                    }
+                    try {
+                        JSON.parse(content);
+                        return content;
+                    } catch (jsonErr) {
+                        console.error("Failed to parse Ollama output as JSON:", content);
+                        this.app.show_toast("JSON formatting failed. Using raw prompt.");
+                        return rawPrompt;
+                    }
+                } else {
+                    throw new Error("Invalid response format from Ollama");
+                }
+            } catch (e) {
+                console.error("AI Prompt Optimization error:", e);
+                this.app.show_toast("AI Optimization failed. Using raw prompt.");
+                return rawPrompt;
+            }
+        },
         async generateCloud() {
             if (!this.prompt.trim()) {
                 this.app.show_toast("Please enter a prompt");
@@ -314,6 +416,14 @@ const IdeogramStudio = {
             this.loading = true;
             this.imageSrc = "";
             this.savedImagePath = "";
+
+            let finalPrompt = this.prompt;
+            if (this.aiOptimizePrompt) {
+                this.loadingTitle = "Optimizing prompt with AI...";
+                this.loadingDesc = "Rewriting prompt via local Gemma model...";
+                finalPrompt = await this.optimizePromptWithOllama(this.prompt);
+            }
+
             this.loadingTitle = "Generating cloud image...";
             this.loadingDesc = "Requesting image generation from Ideogram API";
 
@@ -326,7 +436,7 @@ const IdeogramStudio = {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        text_prompt: this.prompt,
+                        text_prompt: finalPrompt,
                         aspect_ratio: this.selectedRatio.replace(':', 'x'),
                         magic_prompt_option: this.cloudMagicPrompt
                     })
@@ -385,7 +495,7 @@ const IdeogramStudio = {
                     });
                 });
         },
-        generateLocal() {
+        async generateLocal() {
             if (!this.prompt.trim()) {
                 this.app.show_toast("Please enter a prompt");
                 return;
@@ -394,6 +504,14 @@ const IdeogramStudio = {
             this.loading = true;
             this.imageSrc = "";
             this.savedImagePath = "";
+
+            let finalPrompt = this.prompt;
+            if (this.aiOptimizePrompt) {
+                this.loadingTitle = "Optimizing prompt with AI...";
+                this.loadingDesc = "Rewriting prompt via local Gemma model...";
+                finalPrompt = await this.optimizePromptWithOllama(this.prompt);
+            }
+
             this.loadingTitle = "Initializing weights...";
             this.loadingDesc = "Loading Ideogram 4.0 model locally";
 
@@ -415,7 +533,7 @@ const IdeogramStudio = {
             }
 
             const prompt_params = {
-                prompt: this.prompt,
+                prompt: finalPrompt,
                 seed: -1, // Random
                 ddim_steps: Number(this.localSteps),
                 img_width: width,
@@ -1030,5 +1148,85 @@ export default IdeogramStudio;
 @keyframes pulse {
     0% { transform: scale(0.9); opacity: 0.7; }
     100% { transform: scale(1.1); opacity: 1; }
+}
+
+/* Inline toggle */
+.inline_toggle {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.toggle_label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.toggle_label h4 {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.toggle_label p {
+    margin: 0;
+    font-size: 0.75rem;
+    opacity: 0.6;
+    line-height: 1.3;
+}
+
+/* Switch styling */
+.switch_container {
+    position: relative;
+    display: inline-block;
+    width: 42px;
+    height: 22px;
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.switch_container input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider_switch {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #555;
+    transition: .3s;
+}
+
+.slider_switch:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: .3s;
+}
+
+input:checked + .slider_switch {
+    background-color: #3E7BFA;
+}
+
+input:checked + .slider_switch:before {
+    transform: translateX(20px);
+}
+
+.slider_switch.round {
+    border-radius: 34px;
+}
+
+.slider_switch.round:before {
+    border-radius: 50%;
 }
 </style>

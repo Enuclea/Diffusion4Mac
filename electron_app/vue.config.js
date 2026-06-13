@@ -40,7 +40,7 @@ module.exports = {
 
                 // afterSign: "./afterSignHook.js",
                 "extraResources": [{
-                    "from": process.env.BACKEND_BUILD_PATH , 
+                    "from": process.env.BACKEND_BUILD_PATH || "../dist/diffusionbee_backend", 
                     "to": "core",
                     "filter": [
                         "**/*"

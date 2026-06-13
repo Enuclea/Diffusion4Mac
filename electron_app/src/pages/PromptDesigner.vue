@@ -49,6 +49,19 @@
                         {{ analyzing ? 'Analyzing Image...' : 'Describe Image with AI' }}
                     </div>
                 </div>
+
+                <div v-if="imageSrc" class="designer_options" style="margin-top: 15px; width: 100%;">
+                    <div class="form_group inline_toggle">
+                        <label class="switch_container">
+                            <input type="checkbox" v-model="outputJson" :disabled="analyzing">
+                            <span class="slider_switch round"></span>
+                        </label>
+                        <div class="toggle_label">
+                            <h4>✨ Output as Structured JSON</h4>
+                            <p>Generate description in Ideogram 4.0 JSON prompt format</p>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Right panel: AI Prompt Result -->
@@ -66,6 +79,7 @@
                 <div class="action_buttons_row" v-if="resultPrompt">
                     <div @click="useInTxt2Img" class="l_button button_colored">Use in Text-to-Image</div>
                     <div @click="useInImg2Img" class="l_button button_colored" v-if="imagePath">Use in Image-to-Image</div>
+                    <div @click="useInIdeogram" class="l_button button_colored">Use in Ideogram Studio</div>
                 </div>
             </div>
         </div>
@@ -87,6 +101,7 @@ const PromptDesigner = {
             base64Data: '',
             resultPrompt: '',
             analyzing: false,
+            outputJson: false,
         };
     },
     methods: {
@@ -195,6 +210,18 @@ const PromptDesigner = {
                     }
                 }
                 
+                let systemContent = 'Describe this image in detail. Focus on the main subject, style, composition, colors, lighting, and mood. Format the description as a detailed, visually rich Stable Diffusion text-to-image prompt (just the descriptive text, under 75 words, no introductory phrasing).';
+                if (this.outputJson) {
+                    systemContent = 'Describe this image in detail. Focus on the main subject, style, composition, colors, lighting, and mood. Format the description as a detailed, visually rich structured JSON caption. The output MUST be ONLY valid JSON, with NO markdown formatting, NO backticks (do not wrap in ```json), and NO extra text. The JSON must follow this exact schema:\n' +
+                    '{\n' +
+                    '  "high_level_description": "A descriptive overview of the entire scene.",\n' +
+                    '  "style_description": {\n' +
+                    '    "aesthetics": "Visual style keywords (e.g. vibrant, cinematic, photorealistic)",\n' +
+                    '    "medium": "The medium (e.g. photograph, digital illustration, 3D render)"\n' +
+                    '  }\n' +
+                    '}';
+                }
+
                 const response = await fetch("http://127.0.0.1:11435/api/chat", {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -203,7 +230,7 @@ const PromptDesigner = {
                         messages: [
                             {
                                 role: 'user',
-                                content: 'Describe this image in detail. Focus on the main subject, style, composition, colors, lighting, and mood. Format the description as a detailed, visually rich Stable Diffusion text-to-image prompt (just the descriptive text, under 75 words, no introductory phrasing).',
+                                content: systemContent,
                                 images: [this.base64Data]
                             }
                         ],
@@ -217,7 +244,13 @@ const PromptDesigner = {
                 
                 const data = await response.json();
                 if (data.message && data.message.content) {
-                    this.resultPrompt = data.message.content.trim();
+                    let content = data.message.content.trim();
+                    if (this.outputJson) {
+                        if (content.startsWith("```")) {
+                            content = content.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
+                        }
+                    }
+                    this.resultPrompt = content;
                 } else {
                     throw new Error("Invalid response format from Ollama");
                 }
@@ -254,6 +287,20 @@ const PromptDesigner = {
                 if (img2img && img2img[0] && img2img[0].$refs.sd_applet) {
                     Vue.set(img2img[0].$refs.sd_applet.sd_options, 'prompt', this.resultPrompt);
                     Vue.set(img2img[0].$refs.sd_applet.sd_options, 'input_img', this.imagePath);
+                }
+            });
+        },
+        useInIdeogram() {
+            if (!this.resultPrompt) return;
+            
+            // Switch page
+            this.app.functions.switch_page("IdeogramStudio");
+            
+            // Populate prompt options
+            Vue.nextTick(() => {
+                const ideogram = this.app.$refs.router.$refs['IdeogramStudio'];
+                if (ideogram && ideogram[0]) {
+                    Vue.set(ideogram[0], 'prompt', this.resultPrompt);
                 }
             });
         }
@@ -439,5 +486,90 @@ export default PromptDesigner;
 
 @keyframes ai_spin {
     to { transform: rotate(360deg); }
+}
+
+/* Inline toggle & form group */
+.form_group {
+    display: flex;
+    flex-direction: column;
+}
+
+.inline_toggle {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.toggle_label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.toggle_label h4 {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.toggle_label p {
+    margin: 0;
+    font-size: 0.75rem;
+    opacity: 0.6;
+    line-height: 1.3;
+}
+
+/* Switch styling */
+.switch_container {
+    position: relative;
+    display: inline-block;
+    width: 42px;
+    height: 22px;
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.switch_container input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider_switch {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #555;
+    transition: .3s;
+}
+
+.slider_switch:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: .3s;
+}
+
+input:checked + .slider_switch {
+    background-color: #3E7BFA;
+}
+
+input:checked + .slider_switch:before {
+    transform: translateX(20px);
+}
+
+.slider_switch.round {
+    border-radius: 34px;
+}
+
+.slider_switch.round:before {
+    border-radius: 50%;
 }
 </style>

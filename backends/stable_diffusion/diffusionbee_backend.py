@@ -1220,6 +1220,8 @@ def main():
                     )
                     if device == "mps":
                         patch_vae_for_mps(pipe)
+                    print(f"sdbk info Moving Ideogram pipeline to {device}...")
+                    pipe.to(device)
                 elif model_selection == "Flux Klein" and "Flux2KleinPipeline" in globals():
                     # use standard pipeline for klein multi-image editing or standard text2img
                     if flux_fp8:
@@ -1555,17 +1557,33 @@ def main():
                             )
                 elif model_selection == "Ideogram Local":
                     print("Running Ideogram Local Text2Img")
-                    with torch.inference_mode():
-                        out = pipe(
-                            prompt=prompt,
-                            num_inference_steps=num_steps,
-                            guidance_scale=guidance_scale,
-                            guidance_schedule=None,
-                            generator=generator,
-                            height=data.get("img_height", 1024),
-                            width=data.get("img_width", 1024),
-                            callback_on_step_end=progress_cb
-                        )
+                    step_count = 0
+                    orig_scheduler_step = pipe.scheduler.step
+                    def patched_scheduler_step(*args, **kwargs):
+                        nonlocal step_count
+                        res = orig_scheduler_step(*args, **kwargs)
+                        percent = int((step_count + 1) / max(1, num_steps) * 100)
+                        percent = min(100, max(0, percent))
+                        print(f"sdbk dnpr {percent}")
+                        sys.stdout.flush()
+                        step_count += 1
+                        return res
+                    pipe.scheduler.step = patched_scheduler_step
+                    try:
+                        with torch.inference_mode():
+                            out = pipe(
+                                prompt=prompt,
+                                num_inference_steps=num_steps,
+                                guidance_scale=guidance_scale,
+                                guidance_schedule=None,
+                                generator=generator,
+                                height=data.get("img_height", 1024),
+                                width=data.get("img_width", 1024),
+                                callback_on_step_end=None,
+                                max_sequence_length=256
+                            )
+                    finally:
+                        pipe.scheduler.step = orig_scheduler_step
                 else:
                     ref_image = input_image or (guide_images[0] if guide_images else None)
                     if ref_image:

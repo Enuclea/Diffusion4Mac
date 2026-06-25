@@ -1211,7 +1211,10 @@ def main():
                 flush_mps_cache()
 
                 if model_selection == "Ideogram Local":
-                    from diffusers import Ideogram4Pipeline
+                    try:
+                        from diffusers.pipelines.ideogram4.pipeline_ideogram4 import Ideogram4Pipeline
+                    except ImportError:
+                        from diffusers import Ideogram4Pipeline
                     print(f"sdbk info Loading Ideogram Local Pipeline (model_id={model_id})...")
                     pipe = Ideogram4Pipeline.from_pretrained(
                         model_id,

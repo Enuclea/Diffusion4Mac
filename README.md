@@ -23,7 +23,8 @@ By default, Diffusion4Mac hosts and mirrors its core assets on a custom high-spe
 * **FLUX.2 [klein] (4B)** (Optimized for speed and lower-memory Apple Silicon Macs)
 * **FLUX.2 [klein] (9B)** (High-fidelity local model)
 
-## What's New in v2.7.1-beta
+## What's New in v2.7.2-beta
+* **Ideogram 4.0 Local Generation Fix:** Resolved a packaged application import error (`ImportError: cannot import name 'Ideogram4Pipeline' from 'diffusers'`) preventing localized quantized Ideogram 4.0 models from loading and executing correctly in production builds.
 * **Low-Memory FLUX Quantization:** Support for loading local models (FLUX.1-schnell and FLUX.2-klein-9B) using 8-bit quantization (FP8), reducing memory overhead by **~6-10GB**.
 * **Apple Silicon FP8 Compatibility:** An on-the-fly tensor conversion layer dynamically upscales FP8 weights to FP16 when transferring to the MPS device, bypassing Apple Silicon GPU limitations.
 * **VRAM Allocator Optimization:** Added aggressive cache eviction hooks to flush the MPS allocator and reclaim inactive memory after each generation.
@@ -31,7 +32,7 @@ By default, Diffusion4Mac hosts and mirrors its core assets on a custom high-spe
 * **APFS DMG Native Installer:** Updated the installer packaging build system to compile natively under Apple Silicon macOS.
 
 ## Requirements
-* Mac with Apple Silicon (M1/M2/M3/M4/M5) or Intel CPU. (Note: Starting with v2.7.1-beta, macOS builds are compiled natively for Apple Silicon `arm64` by default for maximum performance and to avoid Rosetta translation warnings).
+* Mac with Apple Silicon (M1/M2/M3/M4/M5) or Intel CPU. (Note: Starting with v2.7.2-beta, macOS builds are compiled natively for Apple Silicon `arm64` by default for maximum performance and to avoid Rosetta translation warnings).
 * macOS 12.3 or later
 
 ## License & Attribution
